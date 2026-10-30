@@ -1,27 +1,26 @@
 CREATE OR REPLACE FUNCTION spProductosListarCatalogo()
 RETURNS TABLE (
-    producto_id INT, 
-    codigo_interno VARCHAR, 
-    codigo_barras VARCHAR, 
+    producto_id INT,
+    codigo_interno VARCHAR,
+    codigo_barras VARCHAR,
     nombre_producto VARCHAR,
-    categoria_id INT, 
-    precio_compra DECIMAL, 
-    precio_venta DECIMAL, 
+    categoria_id INT,
+    precio_compra DECIMAL(8,2),
+    precio_venta DECIMAL(8,2),
     estado INT,
     stock_total_acumulado BIGINT
-) 
-LANGUAGE plpgsql
-AS $$
+) AS $$
+#variable_conflict use_column
 BEGIN
     RETURN QUERY
-    SELECT 
-        p.producto_id, 
-        p.codigo_interno, 
-        p.codigo_barras, 
+    SELECT
+        p.producto_id,
+        p.codigo_interno,
+        p.codigo_barras,
         p.nombre_producto,
-        p.categoria_id, 
-        p.precio_compra, 
-        p.precio_venta, 
+        p.categoria_id,
+        p.precio_compra,
+        p.precio_venta,
         p.estado,
         COALESCE(SUM(i.stock), 0)::BIGINT AS stock_total_acumulado
     FROM productos p
@@ -34,11 +33,11 @@ BEGIN
         p.producto_id, 
         p.codigo_interno, 
         p.codigo_barras, 
-        p.nombre_producto,
+        p.nombre_producto, 
         p.categoria_id, 
         p.precio_compra, 
         p.precio_venta, 
         p.estado
     ORDER BY p.nombre_producto ASC;
 END;
-$$;
+$$ LANGUAGE plpgsql;
