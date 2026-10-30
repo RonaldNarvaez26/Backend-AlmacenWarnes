@@ -83,3 +83,4 @@ CREATE SEQUENCE IF NOT EXISTS movimientos_movimiento_id_seq;
 ALTER TABLE movimientos ALTER COLUMN movimiento_id SET DEFAULT nextval('movimientos_movimiento_id_seq');
 ALTER SEQUENCE movimientos_movimiento_id_seq OWNED BY movimientos.movimiento_id;
 SELECT setval('movimientos_movimiento_id_seq', COALESCE((SELECT MAX(movimiento_id) FROM movimientos), 1));
+
