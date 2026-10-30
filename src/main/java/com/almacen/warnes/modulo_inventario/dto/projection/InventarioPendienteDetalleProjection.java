@@ -27,3 +27,4 @@ public interface InventarioPendienteDetalleProjection {
     String getDescripcionLote();
     LocalDate getFechaVencimiento();
 }
+
