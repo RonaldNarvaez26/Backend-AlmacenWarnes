@@ -35,11 +35,12 @@ BEGIN
         LIMIT 1;
     END IF;
 
+    -- Insertar o actualizar producto garantizando NOT NULL en codigo_barras segun esquema original
     IF p_producto_id IS NULL THEN
         INSERT INTO productos 
             (categoria_id, codigo_barras, nombre_producto, codigo_interno, precio_compra, precio_venta, estado, fecha_creacion, usuario_creacion, marca_baja)
         VALUES 
-            (p_categoria_id, NULLIF(TRIM(p_codigo_barras), ''), p_nombre_producto, p_codigo_interno, p_precio_compra, p_precio_venta, 1, CURRENT_TIMESTAMP, p_usuario_creacion, FALSE)
+            (p_categoria_id, COALESCE(NULLIF(TRIM(p_codigo_barras), ''), p_codigo_interno), p_nombre_producto, p_codigo_interno, p_precio_compra, p_precio_venta, 1, CURRENT_TIMESTAMP, p_usuario_creacion, FALSE)
         RETURNING producto_id INTO p_producto_id;
     ELSE
         IF p_codigo_barras IS NOT NULL AND TRIM(p_codigo_barras) <> '' AND EXISTS (
@@ -52,7 +53,7 @@ BEGIN
         UPDATE productos
         SET nombre_producto = p_nombre_producto, 
             categoria_id = p_categoria_id, 
-            codigo_barras = NULLIF(TRIM(p_codigo_barras), ''),
+            codigo_barras = COALESCE(NULLIF(TRIM(p_codigo_barras), ''), codigo_barras),
             precio_compra = p_precio_compra, 
             precio_venta = p_precio_venta, 
             fecha_modificacion = CURRENT_TIMESTAMP, 

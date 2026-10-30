@@ -51,18 +51,6 @@ public class InventarioPendiente {
     @Column(name = "estado", nullable = false)
     private Integer estado;
 
-    @Column(name = "proveedor_id")
-    private Integer proveedorId;
-
-    @Column(name = "descripcion_lote", length = 100)
-    private String descripcionLote;
-
-    @Column(name = "precio_lote", precision = 8, scale = 2)
-    private BigDecimal precioLote;
-
-    @Column(name = "fecha_vencimiento")
-    private LocalDate fechaVencimiento;
-
     @Column(name = "marca_baja", nullable = false)
     @Builder.Default
     private Boolean marcaBaja = false;
@@ -78,4 +66,18 @@ public class InventarioPendiente {
 
     @Column(name = "usuario_revision")
     private Integer usuarioRevision;
+
+    // --- CAMPOS TRANSITORIOS (En tránsito a nivel de DTO / Aplicación, NO existen como columnas en BD) ---
+
+    @Transient
+    private Integer proveedorId;
+
+    @Transient
+    private String descripcionLote;
+
+    @Transient
+    private BigDecimal precioLote;
+
+    @Transient
+    private LocalDate fechaVencimiento;
 }

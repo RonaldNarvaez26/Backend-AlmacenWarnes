@@ -3,12 +3,7 @@
 -- Adaptado 100% a warnes_db_create.sql + Parche de Inventario_Pendientes
 -- ============================================================================
 
--- 1. ASEGURAR COLUMNAS DEL PARCHE EN INVENTARIO_PENDIENTES
-ALTER TABLE inventario_pendientes ADD COLUMN IF NOT EXISTS proveedor_id INT NULL REFERENCES proveedores(proveedor_id);
-ALTER TABLE inventario_pendientes ADD COLUMN IF NOT EXISTS descripcion_lote VARCHAR(100) NULL;
-ALTER TABLE inventario_pendientes ADD COLUMN IF NOT EXISTS precio_lote DECIMAL(8,2) NULL;
-ALTER TABLE inventario_pendientes ADD COLUMN IF NOT EXISTS fecha_vencimiento DATE NULL;
-ALTER TABLE productos ALTER COLUMN codigo_barras DROP NOT NULL;
+-- 1. ESQUEMA ESTRICTO ORIGINAL (SIN ALTER TABLE DDL)
 
 -- 2. TABLA: CONCEPTos (Catalogos parametricos del sistema)
 -- Grupos: 1=Roles, 2=Categorias Productos, 3=Estados Producto, 4=Estados Venta, 5=Metodos Pago, 6=Tipos Movimiento, 7=Estados Sala Espera
@@ -135,28 +130,27 @@ ON CONFLICT (inventario_id) DO NOTHING;
 INSERT INTO inventario_pendientes (
     inventario_pendiente_id, sucursal_id, producto_id, nombre_producto, codigo_barras, codigo_interno, 
     categoria_id, precio_compra, precio_venta, stock_ingresado, estado, 
-    proveedor_id, descripcion_lote, precio_lote, fecha_vencimiento, 
     marca_baja, fecha_creacion, usuario_creacion, fecha_revision, usuario_revision
 ) VALUES
 -- Caso 1: Producto existente (Leche PIL) ingresado por Cajera Ana esperando aprobacion
 (1, 1, 1, 'Leche Entera PIL Bolsa 946ml', '777123456001', 'LEC001', 1, 5.20, 6.00, 30, 1, 
- 1, 'Recepcion Turno Manana Camion PIL', 156.00, CURRENT_DATE + INTERVAL '40 days', FALSE, CURRENT_TIMESTAMP - INTERVAL '2 hours', 3, NULL, NULL),
+ FALSE, CURRENT_TIMESTAMP - INTERVAL '2 hours', 3, NULL, NULL),
 
 -- Caso 2: Producto NUEVO con error tipografico del Cajero ("Gelatina Venado Frambueza") para probar edicion WAR-18 antes de aprobar
 (2, 1, NULL, 'Gelatina Venado Frambueza 150g', '777333444099', 'GEL001', 3, 3.50, 5.00, 24, 1, 
- 2, 'Caja 24 uds Gelatina Venado', 84.00, CURRENT_DATE + INTERVAL '150 days', FALSE, CURRENT_TIMESTAMP - INTERVAL '1 hour', 3, NULL, NULL),
+ FALSE, CURRENT_TIMESTAMP - INTERVAL '1 hour', 3, NULL, NULL),
 
--- Caso 3: Producto NUEVO de Ferreteria sin codigo de barras fisico ni fecha de vencimiento
-(3, 1, NULL, 'Brocha Cerda Natural 2 Pulgadas', '', 'BRO001', 4, 8.00, 12.00, 12, 1, 
- 4, 'Docena Brochas Monopol', 96.00, NULL, FALSE, CURRENT_TIMESTAMP - INTERVAL '30 minutes', 4, NULL, NULL),
+-- Caso 3: Producto NUEVO de Ferreteria con codigo de barras valido
+(3, 1, NULL, 'Brocha Cerda Natural 2 Pulgadas', '777444555099', 'BRO001', 4, 8.00, 12.00, 12, 1, 
+ FALSE, CURRENT_TIMESTAMP - INTERVAL '30 minutes', 4, NULL, NULL),
 
 -- Caso 4: Historico ya Aprobado (Estado = 2)
 (4, 1, 5, 'Gaseosa Coca-Cola Retornable 2L', '777222333001', 'GAS001', 2, 7.50, 10.00, 36, 2, 
- 3, 'Lote Coca-Cola 2L Cajas', 270.00, CURRENT_DATE + INTERVAL '120 days', FALSE, CURRENT_TIMESTAMP - INTERVAL '1 day', 3, CURRENT_TIMESTAMP - INTERVAL '20 hours', 2),
+ FALSE, CURRENT_TIMESTAMP - INTERVAL '1 day', 3, CURRENT_TIMESTAMP - INTERVAL '20 hours', 2),
 
 -- Caso 5: Historico Rechazado por estar duplicado (Estado = 3)
 (5, 1, 6, 'Agua Vital Sin Gas 2L', '777222333002', 'AGU001', 2, 4.50, 7.00, 999, 3, 
- 3, 'Ingreso erroneo de cajero', 4495.50, CURRENT_DATE + INTERVAL '180 days', FALSE, CURRENT_TIMESTAMP - INTERVAL '2 days', 4, CURRENT_TIMESTAMP - INTERVAL '1 day', 2)
+ FALSE, CURRENT_TIMESTAMP - INTERVAL '2 days', 4, CURRENT_TIMESTAMP - INTERVAL '1 day', 2)
 ON CONFLICT (inventario_pendiente_id) DO NOTHING;
 
 -- 12. TABLA: VENTAS y DETALLES_VENTAS (Para poblar modulo de ventas y analitica)

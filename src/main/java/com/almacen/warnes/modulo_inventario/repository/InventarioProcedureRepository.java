@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 import java.sql.CallableStatement;
 import java.sql.Date;
 import java.sql.Types;
+import java.time.LocalDate;
 
 @Repository
 @RequiredArgsConstructor
@@ -16,20 +17,64 @@ public class InventarioProcedureRepository {
 
     private final JdbcTemplate jdbcTemplate;
 
-    public void ejecutarAprobarPendiente(Integer inventarioPendienteId, Integer usuarioRevision) {
-        String sql = "CALL spInventarioPendientesAprobar(?, ?)";
+    /**
+     * Llama al SP de aprobacion inyectando los datos del lote que viajan en el DTO
+     * sin alterar el esquema fisico de inventario_pendientes.
+     */
+    public void ejecutarAprobarPendiente(
+            Integer inventarioPendienteId,
+            Integer usuarioRevision,
+            Integer proveedorId,
+            String descripcionLote,
+            BigDecimal precioLote,
+            LocalDate fechaVencimiento) {
+
+        String sql = "CALL spInventarioPendientesAprobar(?, ?, ?, ?, ?, ?)";
         jdbcTemplate.update(connection -> {
             CallableStatement cs = connection.prepareCall(sql);
+
+            // 1. p_inventario_pendiente_id INT
             if (inventarioPendienteId != null) {
                 cs.setInt(1, inventarioPendienteId);
             } else {
                 cs.setNull(1, Types.INTEGER);
             }
+
+            // 2. p_usuario_revision INT
             if (usuarioRevision != null) {
                 cs.setInt(2, usuarioRevision);
             } else {
-                cs.setNull(2, Types.INTEGER);
+                cs.setInt(2, 1);
             }
+
+            // 3. p_proveedor_id INT (opcional)
+            if (proveedorId != null) {
+                cs.setInt(3, proveedorId);
+            } else {
+                cs.setNull(3, Types.INTEGER);
+            }
+
+            // 4. p_descripcion_lote VARCHAR(100) (opcional)
+            if (descripcionLote != null && !descripcionLote.trim().isEmpty()) {
+                cs.setString(4, descripcionLote.trim());
+            } else {
+                cs.setNull(4, Types.VARCHAR);
+            }
+
+            // 5. p_precio_lote DECIMAL(8,2) (opcional)
+            if (precioLote != null) {
+                cs.setBigDecimal(5, precioLote);
+            } else {
+                cs.setNull(5, Types.NUMERIC);
+            }
+
+            // 6. p_fecha_vencimiento DATE (opcional)
+            if (fechaVencimiento != null) {
+                cs.setDate(6, Date.valueOf(fechaVencimiento));
+            } else {
+                cs.setNull(6, Types.DATE);
+            }
+
             return cs;
         });
     }
@@ -78,7 +123,7 @@ public class InventarioProcedureRepository {
                 cs.setNull(6, Types.INTEGER);
             }
 
-            // 7. p_descripcion_lote VARCHAR(100) (NOT NULL en BD)
+            // 7. p_descripcion_lote VARCHAR(100)
             String descripcionLote = (dto.getDescripcionLote() != null && !dto.getDescripcionLote().trim().isEmpty())
                     ? dto.getDescripcionLote().trim()
                     : "Lote " + (dto.getCodigoInterno() != null ? dto.getCodigoInterno() : "Ingreso");
@@ -91,7 +136,7 @@ public class InventarioProcedureRepository {
                 cs.setNull(8, Types.INTEGER);
             }
 
-            // 9. p_precio_lote DECIMAL(8,2) (NOT NULL en BD)
+            // 9. p_precio_lote DECIMAL(8,2)
             BigDecimal precioLote = dto.getPrecioLote();
             if (precioLote == null && dto.getPrecioCompra() != null && dto.getStockIngresado() != null) {
                 precioLote = dto.getPrecioCompra().multiply(BigDecimal.valueOf(dto.getStockIngresado()));
