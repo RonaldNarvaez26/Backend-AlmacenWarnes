@@ -1,23 +1,29 @@
 package com.almacen.warnes.modulo_inventario.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Schema(description = "Métricas cuantitativas clave del inventario general en tiempo real")
 public class InventarioKpiDTO {
 
+    @Schema(description = "Total de definiciones maestras de productos activos en el catálogo", example = "11")
     @JsonProperty("totalProductosCatalogo")
     private Long totalProductosCatalogo;
 
+    @Schema(description = "Total de unidades físicas en stock activo en almacén", example = "247")
     @JsonProperty("unidadesStockActivo")
     private Long unidadesStockActivo;
 
+    @Schema(description = "Cantidad de ingresos de mercadería esperando revisión en la sala de espera", example = "0")
     @JsonProperty("lotesSalaEspera")
     private Long lotesSalaEspera;
 
+    @Schema(description = "Lotes activos con alerta de caducidad próxima", example = "3")
     @JsonProperty("alertasVencimiento")
     private Long alertasVencimiento;
 
@@ -41,4 +47,3 @@ public class InventarioKpiDTO {
         return alertasVencimiento;
     }
 }
-
