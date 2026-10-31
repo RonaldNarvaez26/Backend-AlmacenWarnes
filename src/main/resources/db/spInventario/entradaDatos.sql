@@ -5,40 +5,56 @@
 
 -- 1. ESQUEMA ESTRICTO ORIGINAL (SIN ALTER TABLE DDL)
 
--- 2. TABLA: CONCEPTos (Catalogos parametricos del sistema)
--- Grupos: 1=Roles, 2=Categorias Productos, 3=Estados Producto, 4=Estados Venta, 5=Metodos Pago, 6=Tipos Movimiento, 7=Estados Sala Espera
+-- 2. TABLA: CONCEPTOS (Catalogos parametricos del sistema)
+-- Grupos: 1=Roles, 2=Categorias Productos, 3=Estados Producto, 4=Metodos Pago, 5=Estados Venta, 6=Tipos Movimiento, 7=Estados Sala Espera
 INSERT INTO conceptos (concepto_id, grupo_id, codigo, descripcion, marca_baja, fecha_creacion, usuario_creacion) VALUES
 -- Grupo 1: Roles de Usuario
-(1, 1, 1, 'Cajero', FALSE, CURRENT_TIMESTAMP, 1),
-(2, 1, 2, 'Supervisor', FALSE, CURRENT_TIMESTAMP, 1),
-(3, 1, 3, 'Propietario / Administrador', FALSE, CURRENT_TIMESTAMP, 1),
--- Grupo 2: Categorias de Productos (Usado en productos.categoria_id)
-(4, 2, 1, 'Lacteos y Derivados', FALSE, CURRENT_TIMESTAMP, 1),
-(5, 2, 2, 'Bebidas y Jugos', FALSE, CURRENT_TIMESTAMP, 1),
-(6, 2, 3, 'Abarrotes y Despensa', FALSE, CURRENT_TIMESTAMP, 1),
-(7, 2, 4, 'Ferreteria y Pinturas', FALSE, CURRENT_TIMESTAMP, 1),
-(8, 2, 5, 'Limpieza del Hogar', FALSE, CURRENT_TIMESTAMP, 1),
--- Grupo 3: Estados de Producto
-(9,  3, 1, 'Activo', FALSE, CURRENT_TIMESTAMP, 1),
-(10, 3, 2, 'Descontinuado', FALSE, CURRENT_TIMESTAMP, 1),
-(11, 3, 3, 'Suspendido', FALSE, CURRENT_TIMESTAMP, 1),
--- Grupo 4: Estados de Venta
-(12, 4, 1, 'Completada', FALSE, CURRENT_TIMESTAMP, 1),
-(13, 4, 2, 'Anulada', FALSE, CURRENT_TIMESTAMP, 1),
--- Grupo 5: Metodos de Venta / Pago
-(14, 5, 1, 'Efectivo', FALSE, CURRENT_TIMESTAMP, 1),
-(15, 5, 2, 'Pago QR Simple', FALSE, CURRENT_TIMESTAMP, 1),
-(16, 5, 3, 'Tarjeta Debito/Credito', FALSE, CURRENT_TIMESTAMP, 1),
-(17, 5, 4, 'Pago Mixto', FALSE, CURRENT_TIMESTAMP, 1),
--- Grupo 6: Tipos de Entrada / Salida / Movimiento
-(18, 6, 1, 'Ingreso por Venta', FALSE, CURRENT_TIMESTAMP, 1),
-(19, 6, 2, 'Gasto Operativo / Servicios', FALSE, CURRENT_TIMESTAMP, 1),
-(20, 6, 3, 'Pago a Proveedor', FALSE, CURRENT_TIMESTAMP, 1),
--- Grupo 7: Estados de Inventario Pendiente (Sala de Espera)
-(21, 7, 1, 'Pendiente de Revision', FALSE, CURRENT_TIMESTAMP, 1),
-(22, 7, 2, 'Aprobado', FALSE, CURRENT_TIMESTAMP, 1),
-(23, 7, 3, 'Rechazado', FALSE, CURRENT_TIMESTAMP, 1)
-ON CONFLICT (concepto_id) DO NOTHING;
+(1, 1, 0, 'Roles de Usuario', false, CURRENT_TIMESTAMP, 1),
+(2, 1, 1, 'Cajero', false, CURRENT_TIMESTAMP, 1),
+(3, 1, 2, 'Supervisor', false, CURRENT_TIMESTAMP, 1),
+(4, 1, 3, 'Propietario', false, CURRENT_TIMESTAMP, 1),
+
+-- Grupo 2: Categoría de Productos
+(5, 2, 0, 'Categoría de Productos', false, CURRENT_TIMESTAMP, 1),
+(6, 2, 1, 'Alimentos', false, CURRENT_TIMESTAMP, 1),
+(7, 2, 2, 'Bebidas', false, CURRENT_TIMESTAMP, 1),
+(8, 2, 3, 'Juguetes', false, CURRENT_TIMESTAMP, 1),
+
+-- Grupo 3: Estado de los productos
+(9, 3, 0, 'Estado de los productos', false, CURRENT_TIMESTAMP, 1),
+(10, 3, 1, 'Activo', false, CURRENT_TIMESTAMP, 1),
+(11, 3, 2, 'Descontinuado', false, CURRENT_TIMESTAMP, 1),
+(12, 3, 3, 'Suspendido', false, CURRENT_TIMESTAMP, 1),
+
+-- Grupo 4: Métodos de Pago
+(13, 4, 0, 'Métodos de Pago', false, CURRENT_TIMESTAMP, 1),
+(14, 4, 1, 'Efectivo', false, CURRENT_TIMESTAMP, 1),
+(15, 4, 2, 'QR', false, CURRENT_TIMESTAMP, 1),
+(16, 4, 3, 'Tarjeta', false, CURRENT_TIMESTAMP, 1),
+(17, 4, 4, 'Mixto', false, CURRENT_TIMESTAMP, 1),
+
+-- Grupo 5: Estado de las Ventas
+(18, 5, 0, 'Estado de las Ventas', false, CURRENT_TIMESTAMP, 1),
+(19, 5, 1, 'Pendiente', false, CURRENT_TIMESTAMP, 1),
+(20, 5, 2, 'Finalizada', false, CURRENT_TIMESTAMP, 1),
+(21, 5, 3, 'Anulada', false, CURRENT_TIMESTAMP, 1),
+
+-- Grupo 6: Tipo de Movimientos
+(22, 6, 0, 'Tipo de Movimientos', false, CURRENT_TIMESTAMP, 1),
+(23, 6, 1, 'Entrada', false, CURRENT_TIMESTAMP, 1),
+(24, 6, 2, 'Salida', false, CURRENT_TIMESTAMP, 1),
+
+-- Grupo 7: Estado de Inventario Pendiente
+(25, 7, 0, 'Estado de Inventario Pendiente', false, CURRENT_TIMESTAMP, 1),
+(26, 7, 1, 'Pendiente', false, CURRENT_TIMESTAMP, 1),
+(27, 7, 2, 'Aprobado', false, CURRENT_TIMESTAMP, 1),
+(28, 7, 3, 'Rechazado', false, CURRENT_TIMESTAMP, 1),
+(29, 7, 4, 'Observado / Para Corrección', false, CURRENT_TIMESTAMP, 1)
+ON CONFLICT (concepto_id) DO UPDATE
+SET grupo_id = EXCLUDED.grupo_id,
+    codigo = EXCLUDED.codigo,
+    descripcion = EXCLUDED.descripcion,
+    marca_baja = EXCLUDED.marca_baja;
 
 -- 3. TABLA: SUCURSALES (Sucursal unica fija = 1)
 INSERT INTO sucursales (sucursal_id, codigo_interno, ciudad, direccion, telefono, marca_baja, fecha_creacion, usuario_creacion) VALUES
@@ -159,9 +175,9 @@ INSERT INTO ventas (
     cobro_qr, cobro_efectivo, cobro_tarjeta, monto_recibido, cambio, 
     cliente_id, anulado_por, marca_baja, fecha_creacion, usuario_creacion
 ) VALUES
-(1, 1, 1, 32.00, 1, 0.00,  32.00, 0.00, 50.00, 18.00, 2, NULL, FALSE, CURRENT_TIMESTAMP - INTERVAL '4 hours', 3),
-(2, 1, 1, 56.00, 2, 56.00, 0.00,  0.00, 56.00, 0.00,  3, NULL, FALSE, CURRENT_TIMESTAMP - INTERVAL '3 hours', 3),
-(3, 1, 1, 146.00,4, 100.00,46.00, 0.00, 50.00, 4.00,  4, NULL, FALSE, CURRENT_TIMESTAMP - INTERVAL '1 hour',  3)
+(1, 1, 2, 32.00, 1, 0.00,  32.00, 0.00, 50.00, 18.00, 2, NULL, FALSE, CURRENT_TIMESTAMP - INTERVAL '4 hours', 3),
+(2, 1, 2, 56.00, 2, 56.00, 0.00,  0.00, 56.00, 0.00,  3, NULL, FALSE, CURRENT_TIMESTAMP - INTERVAL '3 hours', 3),
+(3, 1, 2, 146.00,4, 100.00,46.00, 0.00, 50.00, 4.00,  4, NULL, FALSE, CURRENT_TIMESTAMP - INTERVAL '1 hour',  3)
 ON CONFLICT (venta_id) DO NOTHING;
 
 INSERT INTO detalles_ventas (detalle_venta_id, producto_id, venta_id, inventario_id, precio_unitario, cantidad, marca_baja) VALUES

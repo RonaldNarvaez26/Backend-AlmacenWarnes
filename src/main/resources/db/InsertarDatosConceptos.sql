@@ -1,4 +1,9 @@
-INSERT INTO Conceptos (concepto_id, grupo_id, codigo, descripcion, marca_baja, fecha_creacion, usuario_creacion)
+-- ============================================================================
+-- SCRIPT DE INICIALIZACION: TABLA PARAMETRICA CONCEPTOS (AlmacenWarnes)
+-- Mapeo 1:1 con Frontend (mapeoEstados.ts) y Backend (Spring Boot)
+-- ============================================================================
+
+INSERT INTO conceptos (concepto_id, grupo_id, codigo, descripcion, marca_baja, fecha_creacion, usuario_creacion)
 VALUES
     -- Grupo 1: Roles de Usuario
     (1, 1, 0, 'Roles de Usuario', false, CURRENT_TIMESTAMP, 1),
@@ -37,7 +42,22 @@ VALUES
     (24, 6, 2, 'Salida', false, CURRENT_TIMESTAMP, 1),
 
     -- Grupo 7: Estado de Inventario Pendiente
-    (25, 7, 0, 'Estado de Inventario Pendiente', false, CURRENT_TIMESTAMP, 1),
+    (25, 7, 0, 'Estado de Inventario Pendiente', false, CUR RENT_TIMESTAMP, 1),
     (26, 7, 1, 'Pendiente', false, CURRENT_TIMESTAMP, 1),
     (27, 7, 2, 'Aprobado', false, CURRENT_TIMESTAMP, 1),
-    (28, 7, 3, 'Rechazado', false, CURRENT_TIMESTAMP, 1);
+    (28, 7, 3, 'Rechazado', false, CURRENT_TIMESTAMP, 1),
+    (29, 7, 4, 'Observado / Para Corrección', false, CURRENT_TIMESTAMP, 1)
+
+ON CONFLICT (concepto_id) DO UPDATE
+SET grupo_id = EXCLUDED.grupo_id,
+    codigo = EXCLUDED.codigo,
+    descripcion = EXCLUDED.descripcion,
+    marca_baja = EXCLUDED.marca_baja;
+
+-- Sincronizar secuencia de conceptos de manera segura
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_class WHERE relkind = 'S' AND relname = 'conceptos_concepto_id_seq') THEN
+        PERFORM setval('conceptos_concepto_id_seq', COALESCE((SELECT MAX(concepto_id) FROM conceptos), 1));
+    END IF;
+END $$;

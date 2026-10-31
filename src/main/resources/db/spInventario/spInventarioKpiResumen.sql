@@ -12,7 +12,7 @@ BEGIN
     SELECT 
         (SELECT COUNT(*) FROM productos WHERE marca_baja = FALSE),
         (SELECT COALESCE(SUM(stock), 0) FROM inventario WHERE sucursal_id = 1 AND marca_baja = FALSE),
-        (SELECT COUNT(*) FROM inventario_pendientes WHERE sucursal_id = 1 AND estado = 1 AND marca_baja = FALSE),
+        (SELECT COUNT(*) FROM inventario_pendientes WHERE sucursal_id = 1 AND estado IN (1, 4) AND marca_baja = FALSE),
         (SELECT COUNT(*) FROM inventario i
          INNER JOIN lotes l ON i.lote_id = l.lote_id
          WHERE i.sucursal_id = 1 

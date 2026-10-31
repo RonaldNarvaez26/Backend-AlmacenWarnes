@@ -173,12 +173,39 @@ public class InventarioController {
     public ResponseEntity<Map<String, Object>> rechazarPendiente(
             @Parameter(description = "ID del registro pendiente", example = "101", required = true)
             @PathVariable Integer id,
+            @Parameter(description = "Motivo del rechazo", example = "Mercadería dañada o empaque roto")
+            @RequestParam(name = "motivo", required = false) String motivo,
             @Parameter(description = "ID del supervisor auditor", example = "2")
             @RequestParam(name = "usuarioRevision", required = false) Integer usuarioRevision
     ) {
-        inventarioService.rechazarPendiente(id, usuarioRevision);
+        inventarioService.rechazarPendiente(id, motivo, usuarioRevision);
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("mensaje", "Registro pendiente rechazado exitosamente");
+        response.put("inventarioPendienteId", id);
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(
+            summary = "Mandar a corregir ingreso de mercadería (Supervisor)",
+            description = "Devuelve el registro pendiente al cajero con estado = 4 (Observado / Para Corrección). Guarda la observación para que el cajero la visualice y rectifique los datos."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Registro devuelto al cajero para corrección exitosamente"),
+            @ApiResponse(responseCode = "400", description = "El registro no se encuentra en estado modificable"),
+            @ApiResponse(responseCode = "404", description = "Registro pendiente no encontrado")
+    })
+    @PutMapping("/pendientes/{id}/observar")
+    public ResponseEntity<Map<String, Object>> observarPendiente(
+            @Parameter(description = "ID del registro pendiente", example = "101", required = true)
+            @PathVariable Integer id,
+            @Parameter(description = "Instrucción u observación de corrección para el cajero", example = "Precio de compra inconsistente con factura, verificar por favor")
+            @RequestParam(name = "observacion", required = false) String observacion,
+            @Parameter(description = "ID del supervisor auditor", example = "2")
+            @RequestParam(name = "usuarioRevision", required = false) Integer usuarioRevision
+    ) {
+        inventarioService.observarPendiente(id, observacion, usuarioRevision);
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("mensaje", "Registro devuelto al cajero para corrección exitosamente");
         response.put("inventarioPendienteId", id);
         return ResponseEntity.ok(response);
     }

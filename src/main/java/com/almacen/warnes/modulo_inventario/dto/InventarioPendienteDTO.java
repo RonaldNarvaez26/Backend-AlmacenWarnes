@@ -55,7 +55,7 @@ public class InventarioPendienteDTO {
     @JsonProperty("stockIngresado")
     private Integer stockIngresado;
 
-    @Schema(description = "Estado de revisión (1: Pendiente, 2: Aprobado, 3: Rechazado)", example = "1")
+    @Schema(description = "Estado de revisión (1: Pendiente, 2: Aprobado, 3: Rechazado, 4: Observado / Para Corrección)", example = "1")
     @JsonProperty("estado")
     private Integer estado;
 
@@ -74,6 +74,10 @@ public class InventarioPendienteDTO {
     @Schema(description = "Fecha de vencimiento declarada para el lote", example = "2026-12-08")
     @JsonProperty("fechaVencimiento")
     private LocalDate fechaVencimiento;
+
+    @Schema(description = "Observación o instrucción de corrección redactada por el supervisor", example = "Verificar precio de compra con factura física #4502")
+    @JsonProperty("observacionRevision")
+    private String observacionRevision;
 
     @Schema(description = "Baja lógica", example = "false")
     @JsonProperty("marcaBaja")
@@ -136,6 +140,12 @@ public class InventarioPendienteDTO {
 
     @JsonProperty("fecha_vencimiento")
     public LocalDate getFecha_vencimiento() { return fechaVencimiento; }
+
+    @JsonProperty("observacion_revision")
+    public String getObservacion_revision() { return observacionRevision; }
+
+    @JsonProperty("observacion_revision")
+    public void setObservacion_revision(String obs) { this.observacionRevision = obs; }
 
     @JsonProperty("usuario_creacion")
     public Integer getUsuario_creacion() { return usuarioCreacion; }

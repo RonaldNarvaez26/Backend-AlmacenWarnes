@@ -31,7 +31,7 @@ BEGIN
     FROM inventario_pendientes
     WHERE inventario_pendiente_id = p_inventario_pendiente_id
       AND marca_baja = FALSE
-      AND estado = 1;
+      AND estado IN (1, 4);
 
     IF v_nombre_producto IS NULL THEN
         RAISE EXCEPTION 'El registro pendiente con ID % no existe o ya fue procesado.', p_inventario_pendiente_id;

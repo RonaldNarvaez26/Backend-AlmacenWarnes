@@ -22,12 +22,17 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class InventarioService {
+
+    // Bitácora en memoria para observaciones de auditoría y corrección sin alterar el esquema físico
+    private final Map<Integer, String> observacionesPendientes = new ConcurrentHashMap<>();
 
     private final ProductoRepository productoRepository;
     private final InventarioRepository inventarioRepository;
@@ -91,7 +96,7 @@ public class InventarioService {
      * el último lote conocido del producto mediante @Query con JOIN, sin tocar el esquema de BD.
      */
     public List<InventarioPendienteDTO> listarPendientesActivos() {
-        List<InventarioPendienteDetalleProjection> projections = inventarioPendienteRepository.findPendientesConDetalleLote(1);
+        List<InventarioPendienteDetalleProjection> projections = inventarioPendienteRepository.findAllConDetalleLote();
         if (projections != null && !projections.isEmpty()) {
             return projections.stream().map(p -> {
                 BigDecimal precioLote = (p.getPrecioCompra() != null && p.getStockIngresado() != null)
@@ -118,19 +123,28 @@ public class InventarioService {
                         .descripcionLote(p.getDescripcionLote() != null ? p.getDescripcionLote() : "Lote " + p.getCodigoInterno())
                         .precioLote(precioLote)
                         .fechaVencimiento(p.getFechaVencimiento())
+                        .observacionRevision(observacionesPendientes.get(p.getInventarioPendienteId()))
                         .build();
             }).collect(Collectors.toList());
         }
 
-        return inventarioPendienteRepository.findByEstadoAndMarcaBajaFalse(1).stream()
-                .map(inventarioMapper::toPendienteDTO)
+        return inventarioPendienteRepository.findByMarcaBajaFalse().stream()
+                .map(item -> {
+                    InventarioPendienteDTO dto = inventarioMapper.toPendienteDTO(item);
+                    dto.setObservacionRevision(observacionesPendientes.get(item.getInventarioPendienteId()));
+                    return dto;
+                })
                 .collect(Collectors.toList());
     }
 
     public InventarioPendienteDTO obtenerPendientePorId(Integer id) {
         return inventarioPendienteRepository.findById(id)
                 .filter(p -> !Boolean.TRUE.equals(p.getMarcaBaja()))
-                .map(inventarioMapper::toPendienteDTO)
+                .map(item -> {
+                    InventarioPendienteDTO dto = inventarioMapper.toPendienteDTO(item);
+                    dto.setObservacionRevision(observacionesPendientes.get(id));
+                    return dto;
+                })
                 .orElse(null);
     }
 
@@ -154,9 +168,9 @@ public class InventarioService {
                 .filter(p -> !Boolean.TRUE.equals(p.getMarcaBaja()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Registro pendiente no encontrado con id: " + id));
 
-        // Validar que se encuentre en espera (estado 1)
-        if (pendiente.getEstado() != null && pendiente.getEstado() != 1) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Solo se pueden modificar registros pendientes en estado de espera (estado 1)");
+        // Validar que se encuentre en espera (estado 1) u observado para corrección (estado 4)
+        if (pendiente.getEstado() != null && pendiente.getEstado() != 1 && pendiente.getEstado() != 4) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Solo se pueden modificar registros pendientes en estado de espera (1) u observado (4)");
         }
 
         // 2. Actualizar únicamente las columnas que existen físicamente en inventario_pendientes
@@ -182,8 +196,10 @@ public class InventarioService {
             pendiente.setProductoId(dto.getProductoId());
         }
 
-        // 3. Crucial: Asegurarse de que el estado se mantenga intacto en 1 (Pendiente de Revisión)
+        // 3. Flujo 4 -> 1: Si estaba en estado 4 (observado) y el cajero lo rectifica, vuelve a estado 1 (Pendiente de Revisión)
         pendiente.setEstado(1);
+        pendiente.setFechaRevision(null);
+        pendiente.setUsuarioRevision(null);
 
         // 4. Guardar los cambios usando el método .save() estándar de JPA
         InventarioPendiente actualizado = inventarioPendienteRepository.save(pendiente);
@@ -194,6 +210,7 @@ public class InventarioService {
         responseDto.setDescripcionLote(dto.getDescripcionLote());
         responseDto.setPrecioLote(dto.getPrecioLote());
         responseDto.setFechaVencimiento(dto.getFechaVencimiento());
+        responseDto.setObservacionRevision(observacionesPendientes.get(id));
         return responseDto;
     }
 
@@ -203,8 +220,8 @@ public class InventarioService {
                 .filter(p -> !Boolean.TRUE.equals(p.getMarcaBaja()))
                 .orElseThrow(() -> new IllegalArgumentException("Registro pendiente no encontrado con id: " + id));
 
-        if (pendiente.getEstado() != null && pendiente.getEstado() != 1) {
-            throw new IllegalStateException("Solo se pueden aprobar registros en estado de espera (estado 1)");
+        if (pendiente.getEstado() != null && pendiente.getEstado() != 1 && pendiente.getEstado() != 4) {
+            throw new IllegalStateException("Solo se pueden aprobar registros en estado de espera (1) u observado (4)");
         }
 
         if (cambios != null) {
@@ -245,16 +262,18 @@ public class InventarioService {
         // Inyeccion directa como parametros al procedimiento almacenado
         inventarioProcedureRepository.ejecutarAprobarPendiente(
                 id, usuarioRevision, proveedorId, descripcionLote, precioLote, fechaVencimiento);
+
+        observacionesPendientes.remove(id);
     }
 
     @Transactional
-    public void rechazarPendiente(Integer id, Integer usuarioRevisionParam) {
+    public void rechazarPendiente(Integer id, String motivo, Integer usuarioRevisionParam) {
         InventarioPendiente pendiente = inventarioPendienteRepository.findById(id)
                 .filter(p -> !Boolean.TRUE.equals(p.getMarcaBaja()))
                 .orElseThrow(() -> new IllegalArgumentException("Registro pendiente no encontrado con id: " + id));
 
-        if (pendiente.getEstado() != null && pendiente.getEstado() != 1) {
-            throw new IllegalStateException("Solo se pueden rechazar registros en estado de espera (estado 1)");
+        if (pendiente.getEstado() != null && pendiente.getEstado() != 1 && pendiente.getEstado() != 4) {
+            throw new IllegalStateException("Solo se pueden rechazar registros en estado de espera (1) u observado (4)");
         }
 
         Integer usuarioRevision = usuarioRevisionParam != null ? usuarioRevisionParam : 1;
@@ -263,6 +282,37 @@ public class InventarioService {
         pendiente.setUsuarioRevision(usuarioRevision);
 
         inventarioPendienteRepository.save(pendiente);
+
+        if (motivo != null && !motivo.trim().isEmpty()) {
+            observacionesPendientes.put(id, motivo.trim());
+        }
+    }
+
+    @Transactional
+    public void rechazarPendiente(Integer id, Integer usuarioRevisionParam) {
+        rechazarPendiente(id, null, usuarioRevisionParam);
+    }
+
+    @Transactional
+    public void observarPendiente(Integer id, String observacion, Integer usuarioRevisionParam) {
+        InventarioPendiente pendiente = inventarioPendienteRepository.findById(id)
+                .filter(p -> !Boolean.TRUE.equals(p.getMarcaBaja()))
+                .orElseThrow(() -> new IllegalArgumentException("Registro pendiente no encontrado con id: " + id));
+
+        if (pendiente.getEstado() != null && pendiente.getEstado() != 1 && pendiente.getEstado() != 4) {
+            throw new IllegalStateException("Solo se pueden mandar a corregir registros en estado de espera (1) u observado (4)");
+        }
+
+        Integer usuarioRevision = usuarioRevisionParam != null ? usuarioRevisionParam : 1;
+        pendiente.setEstado(4); // 4 = Observado / Para Corrección
+        pendiente.setFechaRevision(LocalDateTime.now());
+        pendiente.setUsuarioRevision(usuarioRevision);
+
+        inventarioPendienteRepository.save(pendiente);
+
+        if (observacion != null && !observacion.trim().isEmpty()) {
+            observacionesPendientes.put(id, observacion.trim());
+        }
     }
 
     @Transactional
@@ -337,6 +387,7 @@ public class InventarioService {
 
     public List<CategoriaDTO> listarCategoriasActivas() {
         return conceptoRepository.findByGrupoIdAndMarcaBajaFalseOrderByCodigoAsc(2).stream()
+                .filter(c -> c.getCodigo() != null && c.getCodigo() > 0)
                 .map(inventarioMapper::toCategoriaDTO)
                 .collect(Collectors.toList());
     }
