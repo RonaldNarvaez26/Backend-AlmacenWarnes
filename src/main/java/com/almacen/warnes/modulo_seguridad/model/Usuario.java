@@ -17,6 +17,9 @@ public class Usuario {
     @Column(name = "usuario_id")
     private Integer usuarioId;
 
+    @Column(name = "sucursal_id")
+    private Integer sucursalId;
+
     @Column(name = "usuario", nullable = false, length = 50)
     private String usuario;
 
@@ -28,6 +31,9 @@ public class Usuario {
 
     @Column(name = "rol_id", nullable = false)
     private Integer rolId;
+
+    @Column(name = "estado")
+    private Integer estado;
 
     @Column(name = "password", nullable = false, length = 255)
     private String password;

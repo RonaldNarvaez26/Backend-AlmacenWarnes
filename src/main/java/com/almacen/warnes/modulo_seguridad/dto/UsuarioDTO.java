@@ -9,10 +9,12 @@ import java.time.LocalDateTime;
 @Builder
 public class UsuarioDTO {
     private Integer usuarioId;
+    private Integer sucursalId;
     private String usuario;
     private String nombres;
     private String apellidos;
     private Integer rolId;
+    private Integer estado;
     private Boolean marcaBaja;
     private LocalDateTime fechaCreacion;
     private Integer usuarioCreacion;
