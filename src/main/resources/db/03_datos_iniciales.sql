@@ -518,3 +518,4 @@ BEGIN
     WHERE usuario = p_usuario AND marca_baja = FALSE;
 END;
 $$;
+

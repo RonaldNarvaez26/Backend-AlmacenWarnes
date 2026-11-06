@@ -63,6 +63,7 @@ public class UsuarioController {
         @ApiResponses({
                         @ApiResponse(responseCode = "200", description = "Listado general de usuarios activos")
         })
+        @CrossOrigin(origins = "*")
         @GetMapping
         public ResponseEntity<List<UsuarioDTO>> listarUsuarios() {
                 log.info("Consultando lista general de usuarios activos");
