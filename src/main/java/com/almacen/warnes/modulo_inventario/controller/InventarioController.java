@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -24,6 +25,7 @@ import java.util.Map;
         RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT,
         RequestMethod.PATCH, RequestMethod.DELETE, RequestMethod.OPTIONS
 })
+@Slf4j
 @RestController
 @RequestMapping("/api/inventario")
 @RequiredArgsConstructor
@@ -46,7 +48,9 @@ public class InventarioController {
             @Parameter(description = "Prefijo alfabético de 3 letras de la categoría", example = "PRO")
             @RequestParam(name = "prefijo", defaultValue = "PRO") String prefijo
     ) {
+        log.info("Generando código interno correlativo para prefijo '{}'", prefijo);
         CodigoInternoDTO dto = inventarioService.obtenerCodigoInternoDTO(prefijo);
+        log.info("Código interno correlativo generado: '{}'", dto.getCodigoInterno());
         return ResponseEntity.ok(dto);
     }
 
@@ -60,7 +64,10 @@ public class InventarioController {
     })
     @GetMapping("/kpis")
     public ResponseEntity<InventarioKpiDTO> obtenerKpis() {
+        log.info("Consultando KPIs de resumen de inventario");
         InventarioKpiDTO kpis = inventarioService.obtenerKpiResumen();
+        log.info("KPIs calculados -> Catálogo: {}, Stock Activo: {}, Sala Espera: {}, Alertas Caducidad: {}",
+                kpis.getTotalProductosCatalogo(), kpis.getUnidadesStockActivo(), kpis.getLotesSalaEspera(), kpis.getAlertasVencimiento());
         return ResponseEntity.ok(kpis);
     }
 
@@ -73,7 +80,9 @@ public class InventarioController {
     })
     @GetMapping("/lotes")
     public ResponseEntity<List<InventarioLoteDTO>> listarLotes() {
+        log.info("Consultando listado de inventario activo por lotes");
         List<InventarioLoteDTO> lotes = inventarioService.listarLotes();
+        log.info("Total de lotes de inventario recuperados: {}", lotes.size());
         return ResponseEntity.ok(lotes);
     }
 
@@ -86,7 +95,9 @@ public class InventarioController {
     })
     @GetMapping("/catalogo")
     public ResponseEntity<List<ProductoCatalogoDTO>> listarCatalogo() {
+        log.info("Consultando catálogo maestro de productos comerciales");
         List<ProductoCatalogoDTO> catalogo = inventarioService.listarCatalogo();
+        log.info("Catálogo maestro cargado con {} productos registrados", catalogo.size());
         return ResponseEntity.ok(catalogo);
     }
 
@@ -101,7 +112,9 @@ public class InventarioController {
     })
     @GetMapping("/pendientes")
     public ResponseEntity<List<InventarioPendienteDTO>> listarPendientes() {
+        log.info("Consultando registros pendientes en Sala de Espera");
         List<InventarioPendienteDTO> lista = inventarioService.listarPendientesActivos();
+        log.info("Total de registros en Sala de Espera recuperados: {}", lista.size());
         return ResponseEntity.ok(lista);
     }
 
@@ -115,7 +128,10 @@ public class InventarioController {
     })
     @PostMapping("/pendientes")
     public ResponseEntity<InventarioPendienteDTO> registrarPendiente(@Valid @RequestBody RegistroPendienteRequestDTO dto) {
+        log.info("Registrando ingreso a Sala de Espera -> Producto: '{}', Stock: {}, Proveedor ID: {}, Sucursal ID: {}", 
+                dto.getNombreProducto(), dto.getStockIngresado(), dto.getProveedorId(), dto.getSucursalId());
         InventarioPendienteDTO creado = inventarioService.registrarPendiente(dto);
+        log.info("Registro creado en Sala de Espera exitosamente con ID: {}", creado.getInventarioPendienteId());
         return ResponseEntity.status(HttpStatus.CREATED).body(creado);
     }
 
@@ -133,7 +149,9 @@ public class InventarioController {
             @PathVariable Integer id,
             @Valid @RequestBody RegistroPendienteRequestDTO dto
     ) {
+        log.info("Actualizando mercadería en Sala de Espera ID: {}", id);
         InventarioPendienteDTO actualizado = inventarioService.actualizarPendiente(id, dto);
+        log.info("Registro ID: {} en Sala de Espera actualizado exitosamente", id);
         return ResponseEntity.ok(actualizado);
     }
 
@@ -154,7 +172,9 @@ public class InventarioController {
             @Parameter(description = "ID del supervisor auditor", example = "2")
             @RequestParam(name = "usuarioRevision", required = false) Integer usuarioRevision
     ) {
+        log.info("Supervisor ID: {} iniciando aprobación de mercadería en Sala de Espera ID: {}", usuarioRevision, id);
         inventarioService.aprobarPendiente(id, cambios, usuarioRevision);
+        log.info("Mercadería ID: {} aprobada e ingresada exitosamente al inventario físico", id);
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("mensaje", "Lote aprobado e ingresado al inventario exitosamente");
         response.put("inventarioPendienteId", id);
@@ -178,7 +198,9 @@ public class InventarioController {
             @Parameter(description = "ID del supervisor auditor", example = "2")
             @RequestParam(name = "usuarioRevision", required = false) Integer usuarioRevision
     ) {
+        log.info("Supervisor ID: {} rechazando ingreso en Sala de Espera ID: {}, motivo: '{}'", usuarioRevision, id, motivo);
         inventarioService.rechazarPendiente(id, motivo, usuarioRevision);
+        log.info("Ingreso ID: {} marcado como rechazado exitosamente", id);
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("mensaje", "Registro pendiente rechazado exitosamente");
         response.put("inventarioPendienteId", id);
@@ -203,7 +225,9 @@ public class InventarioController {
             @Parameter(description = "ID del supervisor auditor", example = "2")
             @RequestParam(name = "usuarioRevision", required = false) Integer usuarioRevision
     ) {
+        log.info("Supervisor ID: {} observando mercadería en Sala de Espera ID: {}, observación: '{}'", usuarioRevision, id, observacion);
         inventarioService.observarPendiente(id, observacion, usuarioRevision);
+        log.info("Registro ID: {} devuelto al cajero con estado Observado", id);
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("mensaje", "Registro devuelto al cajero para corrección exitosamente");
         response.put("inventarioPendienteId", id);
@@ -221,7 +245,10 @@ public class InventarioController {
     })
     @PostMapping("/ingreso-directo")
     public ResponseEntity<Map<String, String>> ingresoDirectoSupervisor(@Valid @RequestBody IngresoDirectoRequestDTO dto) {
+        log.info("Supervisor registrando ingreso directo -> Producto: '{}', Categoría: {}, Cantidad: {}, Costo Lote: {}", 
+                dto.getNombreProducto(), dto.getCategoriaId(), dto.getStockIngresado(), dto.getPrecioLote());
         inventarioService.ingresoDirectoSupervisor(dto);
+        log.info("Ingreso directo asentado exitosamente en catálogo, lotes e inventario");
         Map<String, String> response = new LinkedHashMap<>();
         response.put("mensaje", "Ingreso directo de mercaderia registrado exitosamente");
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -242,12 +269,16 @@ public class InventarioController {
             @Parameter(description = "Código de barras o código interno de 6 caracteres", example = "777123456001", required = true)
             @RequestParam(name = "codigo") String codigo
     ) {
+        log.info("Buscando producto en catálogo por código: '{}'", codigo);
         ProductoDTO producto = inventarioService.buscarProductoPorCodigo(codigo);
         if (producto == null) {
+            log.warn("Producto no encontrado con el código: '{}'", codigo);
             Map<String, String> error = new LinkedHashMap<>();
             error.put("mensaje", "Producto no encontrado con el codigo especificado: " + codigo);
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
         }
+        log.info("Producto encontrado -> ID: {}, Nombre: '{}', Precio Venta: {}", 
+                producto.getProductoId(), producto.getNombreProducto(), producto.getPrecioVenta());
         return ResponseEntity.ok(producto);
     }
 
@@ -265,7 +296,10 @@ public class InventarioController {
             @PathVariable Integer inventarioId,
             @Valid @RequestBody ActualizarDescuentoRequestDTO dto
     ) {
+        log.info("Actualizando descuento para lote de inventario ID: {}, enDescuento: {}, precioDescuento: {}", 
+                inventarioId, dto.getEnDescuento(), dto.getPrecioDescuento());
         inventarioService.actualizarDescuentoLote(inventarioId, dto);
+        log.info("Descuento para lote ID: {} actualizado exitosamente", inventarioId);
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("mensaje", "Descuento de lote actualizado exitosamente");
         response.put("inventarioId", inventarioId);
@@ -288,7 +322,9 @@ public class InventarioController {
             @PathVariable Integer productoId,
             @Valid @RequestBody ActualizarEstadoProductoRequestDTO dto
     ) {
+        log.info("Actualizando estado comercial del producto ID: {} a nuevo estado: {}", productoId, dto.getEstado());
         ProductoDTO actualizado = inventarioService.actualizarEstadoProducto(productoId, dto.getEstado());
+        log.info("Estado del producto ID: {} actualizado exitosamente a {}", productoId, actualizado.getEstado());
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("mensaje", "Estado del producto actualizado exitosamente");
         response.put("productoId", productoId);
@@ -309,7 +345,9 @@ public class InventarioController {
             @Parameter(description = "Identificador del producto", example = "1", required = true)
             @PathVariable Integer productoId
     ) {
+        log.info("Dando de baja lógica a producto de catálogo ID: {}", productoId);
         inventarioService.eliminarLogicoProducto(productoId);
+        log.info("Producto ID: {} dado de baja lógica exitosamente", productoId);
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("mensaje", "Producto dado de baja exitosamente");
         response.put("productoId", productoId);
@@ -329,7 +367,9 @@ public class InventarioController {
             @Parameter(description = "Identificador del inventario", example = "1", required = true)
             @PathVariable Integer inventarioId
     ) {
+        log.info("Dando de baja lógica a lote de inventario ID: {}", inventarioId);
         inventarioService.eliminarLogicoLoteInventario(inventarioId);
+        log.info("Lote de inventario ID: {} dado de baja lógica exitosamente", inventarioId);
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("mensaje", "Lote de inventario dado de baja exitosamente");
         response.put("inventarioId", inventarioId);
@@ -345,7 +385,9 @@ public class InventarioController {
     })
     @GetMapping("/proveedores")
     public ResponseEntity<List<ProveedorDTO>> listarProveedores() {
+        log.info("Consultando lista auxiliar de proveedores activos para selectores de inventario");
         List<ProveedorDTO> lista = inventarioService.listarProveedoresActivos();
+        log.info("Total de proveedores activos para selector: {}", lista.size());
         return ResponseEntity.ok(lista);
     }
 
@@ -358,7 +400,9 @@ public class InventarioController {
     })
     @GetMapping("/categorias")
     public ResponseEntity<List<CategoriaDTO>> listarCategorias() {
+        log.info("Consultando lista auxiliar de categorías activas");
         List<CategoriaDTO> lista = inventarioService.listarCategoriasActivas();
+        log.info("Total de categorías activas recuperadas: {}", lista.size());
         return ResponseEntity.ok(lista);
     }
 }

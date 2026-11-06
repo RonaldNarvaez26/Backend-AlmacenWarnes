@@ -1,5 +1,6 @@
 package com.almacen.warnes.modulo_inventario.controller;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.NestedRuntimeException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -14,6 +15,7 @@ import java.sql.SQLException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+@Slf4j
 @RestControllerAdvice(basePackages = "com.almacen.warnes.modulo_inventario")
 public class InventarioExceptionHandler {
 
@@ -21,6 +23,7 @@ public class InventarioExceptionHandler {
     public ResponseEntity<Map<String, String>> handleDataAccessException(DataAccessException ex) {
         String mensaje = extraerMensajeLimpio(ex);
         HttpStatus status = determinarHttpStatus(mensaje, ex);
+        log.error("DataAccessException capturada en modulo_inventario [status: {}]: {}", status, mensaje, ex);
 
         Map<String, String> response = new LinkedHashMap<>();
         response.put("mensaje", mensaje);
@@ -31,6 +34,7 @@ public class InventarioExceptionHandler {
     public ResponseEntity<Map<String, String>> handleSQLException(SQLException ex) {
         String mensaje = extraerMensajeLimpio(ex);
         HttpStatus status = determinarHttpStatus(mensaje, ex);
+        log.error("SQLException capturada en modulo_inventario [status: {}]: {}", status, mensaje, ex);
 
         Map<String, String> response = new LinkedHashMap<>();
         response.put("mensaje", mensaje);
@@ -39,6 +43,7 @@ public class InventarioExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, String>> handleIllegalArgumentException(IllegalArgumentException ex) {
+        log.warn("IllegalArgumentException en modulo_inventario: {}", ex.getMessage());
         Map<String, String> response = new LinkedHashMap<>();
         response.put("mensaje", ex.getMessage());
 
@@ -51,6 +56,7 @@ public class InventarioExceptionHandler {
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Map<String, String>> handleIllegalStateException(IllegalStateException ex) {
+        log.warn("IllegalStateException en modulo_inventario: {}", ex.getMessage());
         Map<String, String> response = new LinkedHashMap<>();
         response.put("mensaje", ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
@@ -62,6 +68,7 @@ public class InventarioExceptionHandler {
         String mensaje = (fieldError != null)
                 ? fieldError.getDefaultMessage()
                 : "Error de validacion en los datos enviados";
+        log.warn("Error de validacion en modulo_inventario: {}", mensaje);
 
         Map<String, String> response = new LinkedHashMap<>();
         response.put("mensaje", mensaje);

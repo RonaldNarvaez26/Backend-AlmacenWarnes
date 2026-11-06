@@ -19,9 +19,12 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("Almacén Warnes - API REST")
                         .version("1.0.0")
-                        .description("API RESTful corporativa para la administración y control de inventario físico, " +
-                                "recepción y auditoría de lotes con caducidad, acuerdos logísticos con distribuidores, " +
-                                "catálogo de productos y sala de espera. Desarrollada con Spring Boot y PostgreSQL.")
+                        .description("API RESTful corporativa del sistema Almacén Warnes. " +
+                                "Proporciona servicios integrales para:\n" +
+                                "- **Módulo de Seguridad**: Autenticación, control de sesiones, gestión de usuarios, roles y sucursales.\n" +
+                                "- **Módulo de Inventario**: Administración de stock físico, lotes con caducidad, acuerdos de proveedores, " +
+                                "movimientos de almacén, auditorías y sala de espera.\n\n" +
+                                "Desarrollada con Spring Boot, Spring Security y PostgreSQL.")
                         .contact(new Contact()
                                 .name("Equipo de Desarrollo Almacén Warnes")
                                 .email("soporte@almacenwarnes.com"))
