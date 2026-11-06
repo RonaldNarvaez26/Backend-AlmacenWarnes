@@ -22,10 +22,11 @@ public interface ProveedorRepository extends JpaRepository<Proveedor, Integer> {
     @Query(value = "SELECT * FROM spProveedorKpiResumen()", nativeQuery = true)
     ProveedorKpiProjection obtenerKpiResumen();
 
-    @Query(value = "SELECT * FROM spProveedorListar(:busqueda, :producto)", nativeQuery = true)
+    @Query(value = "SELECT * FROM spProveedorListar(:busqueda, :producto, :estado)", nativeQuery = true)
     List<ProveedorListadoProjection> listarProveedores(
             @Param("busqueda") String busqueda,
-            @Param("producto") String producto
+            @Param("producto") String producto,
+            @Param("estado") String estado
     );
 
     @Query(value = "SELECT spProveedorRegistrar(:nombreEmpresa, :nombreContacto, :numeroContacto, :anotaciones, :usuarioCreacion)", nativeQuery = true)

@@ -24,7 +24,11 @@ public interface InventarioRepository extends JpaRepository<Inventario, Integer>
     @Query(value = "SELECT * FROM spInventarioKpiResumen()", nativeQuery = true)
     InventarioKpiProjection obtenerKpiResumen();
 
-    @Query(value = "SELECT * FROM spInventarioLotesListar()", nativeQuery = true)
-    List<InventarioLoteProjection> listarLotes();
+    @Query(value = "SELECT * FROM spInventarioLotesListar(:estado)", nativeQuery = true)
+    List<InventarioLoteProjection> listarLotes(@org.springframework.data.repository.query.Param("estado") String estado);
+
+    default List<InventarioLoteProjection> listarLotes() {
+        return listarLotes("ACTIVOS");
+    }
 }
 

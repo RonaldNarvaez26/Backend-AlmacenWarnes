@@ -79,6 +79,22 @@ public class InventarioPendienteDTO {
     @JsonProperty("observacionRevision")
     private String observacionRevision;
 
+    @Schema(description = "Fecha de subsanación o rectificación", example = "2026-11-04T22:30:00")
+    @JsonProperty("fechaSubsanacion")
+    private LocalDateTime fechaSubsanacion;
+
+    @Schema(description = "Nombre completo del usuario que creó el registro", example = "Ana Maria Flores Condori")
+    @JsonProperty("nombreUsuarioCreacion")
+    private String nombreUsuarioCreacion;
+
+    @Schema(description = "Nombre completo del supervisor que revisó el registro", example = "Carlos Eduardo Mendoza Quispe")
+    @JsonProperty("nombreUsuarioRevision")
+    private String nombreUsuarioRevision;
+
+    @Schema(description = "Razón social del proveedor abastecedor", example = "PIL Andina S.A.")
+    @JsonProperty("nombreProveedor")
+    private String nombreProveedor;
+
     @Schema(description = "Baja lógica", example = "false")
     @JsonProperty("marcaBaja")
     private Boolean marcaBaja;
@@ -152,4 +168,16 @@ public class InventarioPendienteDTO {
 
     @JsonProperty("usuario_revision")
     public Integer getUsuario_revision() { return usuarioRevision; }
+
+    @JsonProperty("nombre_usuario_creacion")
+    public String getNombre_usuario_creacion() { return nombreUsuarioCreacion; }
+
+    @JsonProperty("nombre_usuario_revision")
+    public String getNombre_usuario_revision() { return nombreUsuarioRevision; }
+
+    @JsonProperty("nombre_proveedor")
+    public String getNombre_proveedor() { return nombreProveedor; }
+
+    @JsonProperty("fecha_subsanacion")
+    public LocalDateTime getFecha_subsanacion() { return fechaSubsanacion; }
 }

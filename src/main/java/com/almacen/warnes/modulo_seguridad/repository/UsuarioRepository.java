@@ -25,8 +25,7 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Integer> {
             @Param("mostrarBajas") Boolean mostrarBajas,
             @Param("rolId") Integer rolId,
             @Param("sucursalId") Integer sucursalId,
-            @Param("textoBusqueda") String textoBusqueda
-    );
+            @Param("textoBusqueda") String textoBusqueda);
 
     // Procedure para modificar usuario
     @Procedure(procedureName = "sp_usuarios_modificar")
@@ -36,13 +35,11 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Integer> {
             @Param("p_nombres") String nombres,
             @Param("p_apellidos") String apellidos,
             @Param("p_rol_id") Integer rolId,
-            @Param("p_usuario_modificacion") Integer usuarioModificacion
-    );
+            @Param("p_usuario_modificacion") Integer usuarioModificacion);
 
     // Procedure para eliminar logicamente
     @Procedure(procedureName = "sp_usuarios_eliminar")
     void spUsuariosEliminar(
             @Param("p_usuario_id") Integer usuarioId,
-            @Param("p_usuario_modificacion") Integer usuarioModificacion
-    );
+            @Param("p_usuario_modificacion") Integer usuarioModificacion);
 }

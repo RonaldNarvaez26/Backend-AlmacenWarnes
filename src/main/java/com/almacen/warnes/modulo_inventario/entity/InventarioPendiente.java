@@ -67,17 +67,21 @@ public class InventarioPendiente {
     @Column(name = "usuario_revision")
     private Integer usuarioRevision;
 
-    // --- CAMPOS TRANSITORIOS (En tránsito a nivel de DTO / Aplicación, NO existen como columnas en BD) ---
-
-    @Transient
+    @Column(name = "proveedor_id")
     private Integer proveedorId;
 
-    @Transient
+    @Column(name = "descripcion_lote", length = 150)
     private String descripcionLote;
+
+    @Column(name = "fecha_vencimiento")
+    private LocalDate fechaVencimiento;
+
+    @Column(name = "observacion_revision", length = 250)
+    private String observacionRevision;
+
+    @Column(name = "fecha_subsanacion")
+    private LocalDateTime fechaSubsanacion;
 
     @Transient
     private BigDecimal precioLote;
-
-    @Transient
-    private LocalDate fechaVencimiento;
 }

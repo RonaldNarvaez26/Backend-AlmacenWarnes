@@ -43,7 +43,8 @@ public class ProveedorController {
                 log.info("Consultando resumen de KPIs para distribuidores/proveedores");
                 ProveedorKpiDTO kpis = proveedorService.obtenerKpiResumen();
                 log.info("KPIs distribuidores calculados -> Total: {}, En Riesgo: {}, Total Lotes: {}",
-                                kpis.getTotalProveedoresActivos(), kpis.getProveedoresAlertasVencimiento(), kpis.getTotalLotesActivos());
+                                kpis.getTotalProveedoresActivos(), kpis.getProveedoresAlertasVencimiento(),
+                                kpis.getTotalLotesActivos());
                 return ResponseEntity.ok(kpis);
         }
 
@@ -54,12 +55,38 @@ public class ProveedorController {
         @GetMapping
         public ResponseEntity<List<ProveedorListadoDTO>> listarProveedores(
                         @Parameter(description = "Texto para filtrar por nombre de empresa, contacto logístico o notas de contrato", example = "PIL Andina") @RequestParam(name = "busqueda", required = false) String busqueda,
-                        @Parameter(description = "Texto para filtrar proveedores que suministran un producto específico (por nombre, código interno o código de barras)", example = "Leche") @RequestParam(name = "producto", required = false) String producto) {
-                log.info("Listando distribuidores -> filtro búsqueda: '{}', filtro producto: '{}'",
-                                busqueda != null ? busqueda : "", producto != null ? producto : "");
-                List<ProveedorListadoDTO> proveedores = proveedorService.listarProveedores(busqueda, producto);
+                        @Parameter(description = "Texto para filtrar proveedores que suministran un producto específico (por nombre, código interno o código de barras)", example = "Leche") @RequestParam(name = "producto", required = false) String producto,
+                        @Parameter(description = "Filtro de estado: ACTIVOS, INACTIVOS, o TODOS", example = "ACTIVOS") @RequestParam(name = "estado", required = false, defaultValue = "ACTIVOS") String estado,
+                        @RequestParam(name = "estadoRegistro", required = false) String estadoRegistro,
+                        @RequestParam(name = "marcaBaja", required = false) Boolean marcaBaja) {
+                String estadoFinal = resolverEstadoFiltro(estado, estadoRegistro, marcaBaja);
+                log.info("Listando distribuidores -> filtro búsqueda: '{}', filtro producto: '{}', estado: '{}'",
+                                busqueda != null ? busqueda : "", producto != null ? producto : "", estadoFinal);
+                List<ProveedorListadoDTO> proveedores = proveedorService.listarProveedores(busqueda, producto,
+                                estadoFinal);
                 log.info("Total distribuidores encontrados: {}", proveedores.size());
                 return ResponseEntity.ok(proveedores);
+        }
+
+        private String resolverEstadoFiltro(String estado, String estadoRegistro, Boolean marcaBaja) {
+                if (Boolean.TRUE.equals(marcaBaja))
+                        return "INACTIVOS";
+                if (Boolean.FALSE.equals(marcaBaja))
+                        return "ACTIVOS";
+                if (estadoRegistro != null && !estadoRegistro.trim().isEmpty()) {
+                        String er = estadoRegistro.trim().toUpperCase();
+                        if (er.contains("BAJA") || er.contains("INACTIVO"))
+                                return "INACTIVOS";
+                        if (er.contains("TODO"))
+                                return "TODOS";
+                        if (er.contains("ACTIVO"))
+                                return "ACTIVOS";
+                        return er;
+                }
+                if (estado != null && !estado.trim().isEmpty()) {
+                        return estado.trim().toUpperCase();
+                }
+                return "ACTIVOS";
         }
 
         @Operation(summary = "Obtener datos de un distribuidor por ID", description = "Recupera la entidad básica de un proveedor activo por su identificador único.")
@@ -70,10 +97,14 @@ public class ProveedorController {
         @GetMapping("/{id}")
         public ResponseEntity<ProveedorDTO> obtenerPorId(
                         @Parameter(description = "Identificador único del distribuidor", example = "1", required = true) @PathVariable("id") Integer id) {
-                log.info("Buscando distribuidor activo por ID: {}", id);
+                log.info("Buscando distribuidor por ID: {}", id);
                 ProveedorDTO dto = proveedorService.obtenerPorId(id);
-                log.info("Distribuidor encontrado -> ID: {}, Empresa: '{}'", dto.getProveedorId(),
-                                dto.getNombreEmpresa());
+                if (dto != null) {
+                        log.info("Distribuidor encontrado -> ID: {}, Empresa: '{}'", dto.getProveedorId(),
+                                        dto.getNombreEmpresa());
+                } else {
+                        log.warn("Distribuidor con ID {} no encontrado", id);
+                }
                 return ResponseEntity.ok(dto);
         }
 
@@ -143,6 +174,20 @@ public class ProveedorController {
                 List<ProveedorCatalogoProductoDTO> catalogo = proveedorService.listarCatalogoProductos(id);
                 log.info("Distribuidor ID: {} tiene {} productos asociados en su catálogo", id, catalogo.size());
                 return ResponseEntity.ok(catalogo);
+        }
+
+        @Operation(summary = "Reactivar o restaurar distribuidor dado de baja")
+        @PutMapping("/{id}/reactivar")
+        public ResponseEntity<Map<String, String>> reactivarProveedor(
+                        @Parameter(description = "ID del distribuidor a reactivar", example = "1", required = true) @PathVariable("id") Integer id,
+                        @RequestParam(name = "usuarioModificacion", required = false) Integer usuarioModificacion) {
+                log.info("Reactivando distribuidor ID: {} por usuario ID: {}", id,
+                                usuarioModificacion != null ? usuarioModificacion : 1);
+                proveedorService.reactivarProveedor(id, usuarioModificacion != null ? usuarioModificacion : 1);
+                log.info("Distribuidor ID: {} reactivado exitosamente", id);
+                Map<String, String> response = new LinkedHashMap<>();
+                response.put("mensaje", "Distribuidor reactivado exitosamente");
+                return ResponseEntity.ok(response);
         }
 
         @Operation(summary = "Consultar historial de lotes y estado de caducidad por proveedor", description = "Ejecuta la función `spProveedorHistorialLotes(:proveedorId, :filtro)`. Permite auditar todos los lotes entregados por el proveedor, cálculo de días restantes para vencer y semáforo de caducidad.")

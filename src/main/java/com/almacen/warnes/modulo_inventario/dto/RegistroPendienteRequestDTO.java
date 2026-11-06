@@ -103,4 +103,14 @@ public class RegistroPendienteRequestDTO {
     @JsonProperty("usuarioRevision")
     @JsonAlias({"usuario_revision", "id_usuario_revision"})
     private Integer usuarioRevision;
+
+    @Schema(description = "Observación o instrucción de revisión", example = "Corregir precio de venta")
+    @JsonProperty("observacionRevision")
+    @JsonAlias({"observacion_revision", "observacion", "nota_subsanacion"})
+    private String observacionRevision;
+
+    @Schema(description = "Fecha de subsanación o rectificación", example = "2026-11-04T22:30:00")
+    @JsonProperty("fechaSubsanacion")
+    @JsonAlias({"fecha_subsanacion"})
+    private java.time.LocalDateTime fechaSubsanacion;
 }

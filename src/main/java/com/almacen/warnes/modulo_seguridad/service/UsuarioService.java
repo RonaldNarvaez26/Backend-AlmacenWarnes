@@ -36,7 +36,8 @@ public class UsuarioService {
     /**
      * Lista usuarios invocando la función PostgreSQL fn_usuarios_listar
      */
-    public List<UsuarioListadoDTO> listarConFiltros(Boolean mostrarBajas, Integer rolId, Integer sucursalId, String textoBusqueda) {
+    public List<UsuarioListadoDTO> listarConFiltros(Boolean mostrarBajas, Integer rolId, Integer sucursalId,
+            String textoBusqueda) {
         String sql = "SELECT * FROM fn_usuarios_listar(CAST(? AS BOOLEAN), CAST(? AS INTEGER), CAST(? AS INTEGER), CAST(? AS VARCHAR))";
         return jdbcTemplate.query(sql, (rs, rowNum) -> UsuarioListadoDTO.builder()
                 .usuarioId(rs.getInt("usuario_id"))
@@ -47,8 +48,8 @@ public class UsuarioService {
                 .rolId(rs.getInt("rol_id"))
                 .descripcionRol(rs.getString("descripcion_rol"))
                 .estado(rs.getObject("estado") != null ? rs.getInt("estado") : 1)
-                .fechaCreacion(rs.getTimestamp("fecha_creacion") != null 
-                        ? rs.getTimestamp("fecha_creacion").toLocalDateTime() 
+                .fechaCreacion(rs.getTimestamp("fecha_creacion") != null
+                        ? rs.getTimestamp("fecha_creacion").toLocalDateTime()
                         : null)
                 .build(),
                 mostrarBajas, rolId, sucursalId, textoBusqueda);
@@ -68,7 +69,8 @@ public class UsuarioService {
     }
 
     /**
-     * Registra un nuevo usuario llamando al procedimiento almacenado sp_usuarios_insertar
+     * Registra un nuevo usuario llamando al procedimiento almacenado
+     * sp_usuarios_insertar
      * Cifra la contraseña con BCrypt antes de enviarla
      */
     @Transactional
@@ -157,7 +159,8 @@ public class UsuarioService {
     }
 
     /**
-     * Solicita la recuperación de contraseña invocando el procedimiento almacenado sp_usuarios_solicitar_recuperacion
+     * Solicita la recuperación de contraseña invocando el procedimiento almacenado
+     * sp_usuarios_solicitar_recuperacion
      * Cambia el estado a 2 ('Solicita Recuperación')
      */
     @Transactional
@@ -170,13 +173,15 @@ public class UsuarioService {
     }
 
     /**
-     * Permite al propietario restablecer la contraseña a un usuario (después de su solicitud o directamente)
+     * Permite al propietario restablecer la contraseña a un usuario (después de su
+     * solicitud o directamente)
      * Cifra con BCrypt y restablece el estado a 1 ('Activo')
      */
     @Transactional
     public void recuperarContrasena(RecuperarContrasenaDTO dto) {
         Usuario usuario = usuarioRepository.findByUsuarioAndMarcaBajaFalse(dto.getUsuario())
-                .orElseThrow(() -> new IllegalArgumentException("No se encontró ningún usuario activo con el nombre: " + dto.getUsuario()));
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "No se encontró ningún usuario activo con el nombre: " + dto.getUsuario()));
 
         usuario.setPassword(passwordEncoder.encode(dto.getNuevaPassword()));
         usuario.setEstado(1); // Restablecer a 1 ('Activo')

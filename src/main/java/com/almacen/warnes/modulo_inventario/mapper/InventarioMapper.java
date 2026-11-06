@@ -47,6 +47,7 @@ public class InventarioMapper {
                 .fechaVencimiento(projection.getFecha_vencimiento())
                 .nombreProveedor(projection.getNombre_proveedor())
                 .diasParaVencer(projection.getDias_para_vencer())
+                .marcaBaja(projection.getMarca_baja())
                 .build();
     }
 
@@ -60,10 +61,12 @@ public class InventarioMapper {
                 .codigoBarras(projection.getCodigo_barras())
                 .nombreProducto(projection.getNombre_producto())
                 .categoriaId(projection.getCategoria_id())
+                .categoriaNombre(projection.getCategoria_nombre())
                 .precioCompra(projection.getPrecio_compra())
                 .precioVenta(projection.getPrecio_venta())
                 .estado(projection.getEstado())
                 .stockTotalAcumulado(projection.getStock_total_acumulado())
+                .marcaBaja(projection.getMarca_baja())
                 .build();
     }
 
@@ -87,6 +90,8 @@ public class InventarioMapper {
                 .descripcionLote(entity.getDescripcionLote())
                 .precioLote(entity.getPrecioLote())
                 .fechaVencimiento(entity.getFechaVencimiento())
+                .observacionRevision(entity.getObservacionRevision())
+                .fechaSubsanacion(entity.getFechaSubsanacion())
                 .marcaBaja(entity.getMarcaBaja())
                 .fechaCreacion(entity.getFechaCreacion())
                 .usuarioCreacion(entity.getUsuarioCreacion())
@@ -114,6 +119,8 @@ public class InventarioMapper {
                 .descripcionLote(dto.getDescripcionLote())
                 .precioLote(dto.getPrecioLote())
                 .fechaVencimiento(dto.getFechaVencimiento())
+                .observacionRevision(dto.getObservacionRevision())
+                .fechaSubsanacion(dto.getFechaSubsanacion())
                 .marcaBaja(false)
                 .fechaCreacion(LocalDateTime.now())
                 .usuarioCreacion(dto.getUsuarioCreacion() != null ? dto.getUsuarioCreacion() : 1)
@@ -143,6 +150,7 @@ public class InventarioMapper {
                 .codigo(entity.getCodigo())
                 .nombreCategoria(entity.getDescripcion())
                 .descripcion(entity.getDescripcion())
+                .marcaBaja(entity.getMarcaBaja() != null ? entity.getMarcaBaja() : false)
                 .build();
     }
 }

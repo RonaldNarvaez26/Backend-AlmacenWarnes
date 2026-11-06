@@ -15,7 +15,10 @@ VALUES
     (5, 2, 0, 'Categoría de Productos', false, CURRENT_TIMESTAMP, 1),
     (6, 2, 1, 'Alimentos', false, CURRENT_TIMESTAMP, 1),
     (7, 2, 2, 'Bebidas', false, CURRENT_TIMESTAMP, 1),
-    (8, 2, 3, 'Juguetes', false, CURRENT_TIMESTAMP, 1),
+    (8, 2, 3, 'Abarrotes', false, CURRENT_TIMESTAMP, 1),
+    (30, 2, 4, 'Ferretería y Pinturas', false, CURRENT_TIMESTAMP, 1),
+    (31, 2, 5, 'Limpieza y Cuidado del Hogar', false, CURRENT_TIMESTAMP, 1),
+    (32, 2, 6, 'Juguetes', false, CURRENT_TIMESTAMP, 1),
 
     -- Grupo 3: Estado de los productos
     (9, 3, 0, 'Estado de los productos', false, CURRENT_TIMESTAMP, 1),
@@ -42,7 +45,7 @@ VALUES
     (24, 6, 2, 'Salida', false, CURRENT_TIMESTAMP, 1),
 
     -- Grupo 7: Estado de Inventario Pendiente
-    (25, 7, 0, 'Estado de Inventario Pendiente', false, CUR RENT_TIMESTAMP, 1),
+    (25, 7, 0, 'Estado de Inventario Pendiente', false, CURRENT_TIMESTAMP, 1),
     (26, 7, 1, 'Pendiente', false, CURRENT_TIMESTAMP, 1),
     (27, 7, 2, 'Aprobado', false, CURRENT_TIMESTAMP, 1),
     (28, 7, 3, 'Rechazado', false, CURRENT_TIMESTAMP, 1),
