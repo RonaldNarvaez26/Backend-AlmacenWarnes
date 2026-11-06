@@ -66,28 +66,54 @@ public class InventarioController {
 
     @Operation(
             summary = "Listar inventario activo por lotes",
-            description = "Ejecuta la función almacenada `spInventarioLotesListar()`. Retorna todo el stock físico detallado por lote, producto y distribuidor, con días para vencer y estado de oferta."
+            description = "Ejecuta la función almacenada `spInventarioLotesListar(:estado)`. Retorna el stock físico detallado por lote, producto y distribuidor, filtrado por estado de registro (ACTIVOS, INACTIVOS, TODOS)."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Listado de lotes obtenido exitosamente")
     })
     @GetMapping("/lotes")
-    public ResponseEntity<List<InventarioLoteDTO>> listarLotes() {
-        List<InventarioLoteDTO> lotes = inventarioService.listarLotes();
+    public ResponseEntity<List<InventarioLoteDTO>> listarLotes(
+            @RequestParam(name = "estado", required = false, defaultValue = "ACTIVOS") String estado,
+            @RequestParam(name = "estadoRegistro", required = false) String estadoRegistro,
+            @RequestParam(name = "marcaBaja", required = false) Boolean marcaBaja
+    ) {
+        String estadoFinal = resolverEstadoFiltro(estado, estadoRegistro, marcaBaja);
+        List<InventarioLoteDTO> lotes = inventarioService.listarLotes(estadoFinal);
         return ResponseEntity.ok(lotes);
     }
 
     @Operation(
             summary = "Listar catálogo maestro con stock acumulado",
-            description = "Ejecuta la función almacenada `spProductosListarCatalogo()`. Consolida el stock total disponible de cada producto sumando todas las existencias de sus lotes activos."
+            description = "Ejecuta la función almacenada `spProductosListarCatalogo(:estado)`. Consolida el stock total disponible de cada producto sumando todas las existencias de sus lotes, filtrado por estado de registro."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Catálogo maestro recuperado exitosamente")
     })
     @GetMapping("/catalogo")
-    public ResponseEntity<List<ProductoCatalogoDTO>> listarCatalogo() {
-        List<ProductoCatalogoDTO> catalogo = inventarioService.listarCatalogo();
+    public ResponseEntity<List<ProductoCatalogoDTO>> listarCatalogo(
+            @RequestParam(name = "estado", required = false, defaultValue = "ACTIVOS") String estado,
+            @RequestParam(name = "estadoRegistro", required = false) String estadoRegistro,
+            @RequestParam(name = "marcaBaja", required = false) Boolean marcaBaja
+    ) {
+        String estadoFinal = resolverEstadoFiltro(estado, estadoRegistro, marcaBaja);
+        List<ProductoCatalogoDTO> catalogo = inventarioService.listarCatalogo(estadoFinal);
         return ResponseEntity.ok(catalogo);
+    }
+
+    private String resolverEstadoFiltro(String estado, String estadoRegistro, Boolean marcaBaja) {
+        if (Boolean.TRUE.equals(marcaBaja)) return "INACTIVOS";
+        if (Boolean.FALSE.equals(marcaBaja)) return "ACTIVOS";
+        if (estadoRegistro != null && !estadoRegistro.trim().isEmpty()) {
+            String er = estadoRegistro.trim().toUpperCase();
+            if (er.contains("BAJA") || er.contains("INACTIVO")) return "INACTIVOS";
+            if (er.contains("TODO")) return "TODOS";
+            if (er.contains("ACTIVO")) return "ACTIVOS";
+            return er;
+        }
+        if (estado != null && !estado.trim().isEmpty()) {
+            return estado.trim().toUpperCase();
+        }
+        return "ACTIVOS";
     }
 
     // --- Endpoints de Sala de Espera (Paso 2) ---
@@ -239,13 +265,20 @@ public class InventarioController {
     })
     @GetMapping("/productos/buscar")
     public ResponseEntity<?> buscarProductoPorCodigo(
-            @Parameter(description = "Código de barras o código interno de 6 caracteres", example = "777123456001", required = true)
-            @RequestParam(name = "codigo") String codigo
+            @Parameter(description = "Código de barras o código interno de 6 caracteres", example = "777123456001")
+            @RequestParam(name = "codigo", required = false) String codigo,
+            @RequestParam(name = "codigoBarras", required = false) String codigoBarras
     ) {
-        ProductoDTO producto = inventarioService.buscarProductoPorCodigo(codigo);
+        String codigoFinal = (codigoBarras != null && !codigoBarras.trim().isEmpty()) ? codigoBarras : codigo;
+        if (codigoFinal == null || codigoFinal.trim().isEmpty()) {
+            Map<String, String> error = new LinkedHashMap<>();
+            error.put("mensaje", "Debe proporcionar el parámetro 'codigo' o 'codigoBarras'");
+            return ResponseEntity.badRequest().body(error);
+        }
+        ProductoDTO producto = inventarioService.buscarProductoPorCodigo(codigoFinal);
         if (producto == null) {
             Map<String, String> error = new LinkedHashMap<>();
-            error.put("mensaje", "Producto no encontrado con el codigo especificado: " + codigo);
+            error.put("mensaje", "Producto no encontrado con el codigo especificado: " + codigoFinal);
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
         }
         return ResponseEntity.ok(producto);
@@ -316,6 +349,20 @@ public class InventarioController {
         return ResponseEntity.ok(response);
     }
 
+    @Operation(summary = "Reactivar o restaurar producto dado de baja en catálogo")
+    @PutMapping("/productos/{productoId}/reactivar")
+    public ResponseEntity<Map<String, Object>> reactivarProducto(
+            @Parameter(description = "Identificador del producto a reactivar", example = "1", required = true)
+            @PathVariable Integer productoId,
+            @RequestParam(name = "usuarioModificacion", required = false) Integer usuarioModificacion
+    ) {
+        inventarioService.reactivarProducto(productoId, usuarioModificacion != null ? usuarioModificacion : 1);
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("mensaje", "Producto reactivado exitosamente en catálogo");
+        response.put("productoId", productoId);
+        return ResponseEntity.ok(response);
+    }
+
     @Operation(
             summary = "Dar de baja lógica a un lote de inventario",
             description = "Establece `marca_baja = true` en la tabla `inventario` retirando el lote del stock vendible."
@@ -333,6 +380,43 @@ public class InventarioController {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("mensaje", "Lote de inventario dado de baja exitosamente");
         response.put("inventarioId", inventarioId);
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "Reactivar o restaurar lote de inventario dado de baja")
+    @PutMapping("/lotes/{inventarioId}/reactivar")
+    public ResponseEntity<Map<String, Object>> reactivarLote(
+            @Parameter(description = "Identificador del registro de inventario a reactivar", example = "1", required = true)
+            @PathVariable Integer inventarioId,
+            @RequestParam(name = "usuarioModificacion", required = false) Integer usuarioModificacion
+    ) {
+        inventarioService.reactivarLoteInventario(inventarioId, usuarioModificacion != null ? usuarioModificacion : 1);
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("mensaje", "Lote de inventario reactivado exitosamente");
+        response.put("inventarioId", inventarioId);
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(
+            summary = "Descontar unidades específicas de stock (Merma / Ajuste / Rotura)",
+            description = "Ejecuta el procedimiento almacenado `CALL spInventarioDescontarUnidades(...)` para retirar unidades físicas de un lote sin dar de baja el producto general del catálogo. Si la cantidad a restar supera el stock disponible, la base de datos lanza una excepción controlada."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Unidades descontadas exitosamente"),
+            @ApiResponse(responseCode = "400", description = "Cantidad a descontar inválida o supera el stock disponible"),
+            @ApiResponse(responseCode = "404", description = "Registro de inventario no encontrado o dado de baja")
+    })
+    @PutMapping({ "/{id}/descontar-unidades", "/lotes/{id}/descontar-unidades" })
+    public ResponseEntity<Map<String, Object>> descontarUnidades(
+            @Parameter(description = "Identificador del registro en inventario", example = "1", required = true)
+            @PathVariable("id") Integer id,
+            @Valid @RequestBody DescontarUnidadesRequestDTO request
+    ) {
+        inventarioService.descontarUnidades(id, request);
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("mensaje", "Se descontaron " + request.getCantidad() + " unidades de stock exitosamente");
+        response.put("inventarioId", id);
+        response.put("cantidadDescontada", request.getCantidad());
         return ResponseEntity.ok(response);
     }
 
@@ -360,5 +444,57 @@ public class InventarioController {
     public ResponseEntity<List<CategoriaDTO>> listarCategorias() {
         List<CategoriaDTO> lista = inventarioService.listarCategoriasActivas();
         return ResponseEntity.ok(lista);
+    }
+
+    @Operation(
+            summary = "Registrar nueva categoría de producto (Grupo 2)",
+            description = "Inserta un nuevo concepto en la tabla paramétrica `conceptos` (grupo_id = 2) con el siguiente código secuencial disponible y retorna el listado actualizado."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Categoría creada exitosamente y lista actualizada retornada"),
+            @ApiResponse(responseCode = "400", description = "Nombre de categoría inválido o ya existente")
+    })
+    @PostMapping("/categorias")
+    public ResponseEntity<List<CategoriaDTO>> crearCategoria(
+            @Valid @RequestBody CrearCategoriaRequestDTO request
+    ) {
+        List<CategoriaDTO> lista = inventarioService.crearCategoria(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(lista);
+    }
+
+    @Operation(
+            summary = "Listar todas las categorías (Gestión administrativa)",
+            description = "Retorna todas las categorías del grupo 2 de conceptos incluyendo activas y dadas de baja."
+    )
+    @GetMapping("/categorias/gestion")
+    public ResponseEntity<List<CategoriaDTO>> listarTodasCategorias() {
+        return ResponseEntity.ok(inventarioService.listarTodasCategorias());
+    }
+
+    @Operation(
+            summary = "Actualizar nombre de una categoría",
+            description = "Modifica la descripción de una categoría paramétrica (Grupo 2)."
+    )
+    @PutMapping("/categorias/{codigo}")
+    public ResponseEntity<CategoriaDTO> actualizarCategoria(
+            @PathVariable Integer codigo,
+            @RequestBody Map<String, String> body
+    ) {
+        String nuevoNombre = body.get("nombre");
+        CategoriaDTO dto = inventarioService.actualizarCategoria(codigo, nuevoNombre);
+        return ResponseEntity.ok(dto);
+    }
+
+    @Operation(
+            summary = "Activar o dar de baja lógica a una categoría",
+            description = "Establece marca_baja = true/false en conceptos grupo 2."
+    )
+    @PatchMapping("/categorias/{codigo}/estado")
+    public ResponseEntity<CategoriaDTO> cambiarEstadoCategoria(
+            @PathVariable Integer codigo,
+            @RequestParam(name = "baja", defaultValue = "true") Boolean baja
+    ) {
+        CategoriaDTO dto = inventarioService.cambiarEstadoCategoria(codigo, baja);
+        return ResponseEntity.ok(dto);
     }
 }

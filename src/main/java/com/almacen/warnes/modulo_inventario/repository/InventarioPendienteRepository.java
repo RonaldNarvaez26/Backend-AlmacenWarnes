@@ -19,8 +19,9 @@ public interface InventarioPendienteRepository extends JpaRepository<InventarioP
     List<InventarioPendiente> findByEstadoAndMarcaBajaFalse(@Param("estado") Integer estado);
 
     /**
-     * Resuelve los datos de la Sala de Espera combinando la tabla inventario_pendientes con
-     * el último lote conocido del producto mediante LEFT JOIN LATERAL, sin alterar el esquema de la BD.
+     * Resuelve los datos de la Sala de Espera leyendo directamente las columnas físicas
+     * de inventario_pendientes (proveedor_id, descripcion_lote, fecha_vencimiento, observacion_revision, fecha_subsanacion)
+     * y cruzando con las tablas reales usuarios y proveedores. CERO LEFT JOIN LATERAL a lotes.
      */
     @Query(value = """
         SELECT ip.inventario_pendiente_id AS inventarioPendienteId,
@@ -39,18 +40,18 @@ public interface InventarioPendienteRepository extends JpaRepository<InventarioP
                ip.usuario_creacion AS usuarioCreacion,
                ip.fecha_revision AS fechaRevision,
                ip.usuario_revision AS usuarioRevision,
-               ult_lote.proveedor_id AS proveedorId,
-               ult_lote.descripcion AS descripcionLote,
-               ult_lote.fecha_vencimiento AS fechaVencimiento
+               ip.proveedor_id AS proveedorId,
+               ip.descripcion_lote AS descripcionLote,
+               ip.fecha_vencimiento AS fechaVencimiento,
+               ip.observacion_revision AS observacionRevision,
+               ip.fecha_subsanacion AS fechaSubsanacion,
+               TRIM(CONCAT(COALESCE(uc.nombres, ''), ' ', COALESCE(uc.apellidos, ''))) AS nombreUsuarioCreacion,
+               TRIM(CONCAT(COALESCE(ur.nombres, ''), ' ', COALESCE(ur.apellidos, ''))) AS nombreUsuarioRevision,
+               pr.nombre_empresa AS nombreProveedor
         FROM inventario_pendientes ip
-        LEFT JOIN LATERAL (
-            SELECT l.proveedor_id, l.descripcion, l.fecha_vencimiento
-            FROM inventario inv
-            JOIN lotes l ON inv.lote_id = l.lote_id
-            WHERE inv.producto_id = ip.producto_id AND l.marca_baja = false
-            ORDER BY l.lote_id DESC
-            LIMIT 1
-        ) ult_lote ON ip.producto_id IS NOT NULL
+        LEFT JOIN usuarios uc ON uc.usuario_id = ip.usuario_creacion
+        LEFT JOIN usuarios ur ON ur.usuario_id = ip.usuario_revision
+        LEFT JOIN proveedores pr ON pr.proveedor_id = ip.proveedor_id
         WHERE (:estado IS NULL OR ip.estado = :estado) AND ip.marca_baja = false
         ORDER BY ip.inventario_pendiente_id DESC
     """, nativeQuery = true)
@@ -73,18 +74,18 @@ public interface InventarioPendienteRepository extends JpaRepository<InventarioP
                ip.usuario_creacion AS usuarioCreacion,
                ip.fecha_revision AS fechaRevision,
                ip.usuario_revision AS usuarioRevision,
-               ult_lote.proveedor_id AS proveedorId,
-               ult_lote.descripcion AS descripcionLote,
-               ult_lote.fecha_vencimiento AS fechaVencimiento
+               ip.proveedor_id AS proveedorId,
+               ip.descripcion_lote AS descripcionLote,
+               ip.fecha_vencimiento AS fechaVencimiento,
+               ip.observacion_revision AS observacionRevision,
+               ip.fecha_subsanacion AS fechaSubsanacion,
+               TRIM(CONCAT(COALESCE(uc.nombres, ''), ' ', COALESCE(uc.apellidos, ''))) AS nombreUsuarioCreacion,
+               TRIM(CONCAT(COALESCE(ur.nombres, ''), ' ', COALESCE(ur.apellidos, ''))) AS nombreUsuarioRevision,
+               pr.nombre_empresa AS nombreProveedor
         FROM inventario_pendientes ip
-        LEFT JOIN LATERAL (
-            SELECT l.proveedor_id, l.descripcion, l.fecha_vencimiento
-            FROM inventario inv
-            JOIN lotes l ON inv.lote_id = l.lote_id
-            WHERE inv.producto_id = ip.producto_id AND l.marca_baja = false
-            ORDER BY l.lote_id DESC
-            LIMIT 1
-        ) ult_lote ON ip.producto_id IS NOT NULL
+        LEFT JOIN usuarios uc ON uc.usuario_id = ip.usuario_creacion
+        LEFT JOIN usuarios ur ON ur.usuario_id = ip.usuario_revision
+        LEFT JOIN proveedores pr ON pr.proveedor_id = ip.proveedor_id
         WHERE ip.marca_baja = false
         ORDER BY ip.inventario_pendiente_id DESC
     """, nativeQuery = true)

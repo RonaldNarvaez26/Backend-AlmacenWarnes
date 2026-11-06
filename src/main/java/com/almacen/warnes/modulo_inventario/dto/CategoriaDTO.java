@@ -27,6 +27,15 @@ public class CategoriaDTO {
     @JsonProperty("descripcion")
     private String descripcion;
 
+    @Schema(description = "Indica si la categoría fue dada de baja lógica", example = "false")
+    @JsonProperty("marcaBaja")
+    private Boolean marcaBaja;
+
+    @JsonProperty("marca_baja")
+    public Boolean getMarca_baja() {
+        return marcaBaja;
+    }
+
     @JsonProperty("categoria_id")
     public Integer getCategoria_id() {
         return categoriaId;

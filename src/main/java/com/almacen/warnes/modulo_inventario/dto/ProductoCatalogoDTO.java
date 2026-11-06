@@ -33,6 +33,10 @@ public class ProductoCatalogoDTO {
     @JsonProperty("categoriaId")
     private Integer categoriaId;
 
+    @Schema(description = "Nombre descriptivo de la categoría en conceptos", example = "Alimentos")
+    @JsonProperty("categoriaNombre")
+    private String categoriaNombre;
+
     @Schema(description = "Precio de adquisición base", example = "5.20")
     @JsonProperty("precioCompra")
     private BigDecimal precioCompra;
@@ -49,6 +53,15 @@ public class ProductoCatalogoDTO {
     @JsonProperty("stockTotalAcumulado")
     private Long stockTotalAcumulado;
 
+    @Schema(description = "Marca de baja lógica del producto maestro", example = "false")
+    @JsonProperty("marcaBaja")
+    private Boolean marcaBaja;
+
+    @JsonProperty("marca_baja")
+    public Boolean getMarca_baja() {
+        return marcaBaja;
+    }
+
     @JsonProperty("producto_id")
     public Integer getProducto_id() {
         return productoId;
@@ -57,6 +70,11 @@ public class ProductoCatalogoDTO {
     @JsonProperty("codigo_interno")
     public String getCodigo_interno() {
         return codigoInterno;
+    }
+
+    @JsonProperty("categoria_nombre")
+    public String getCategoria_nombre() {
+        return categoriaNombre;
     }
 
     @JsonProperty("codigo_barras")

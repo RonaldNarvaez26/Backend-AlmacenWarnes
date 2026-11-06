@@ -8,9 +8,11 @@ public interface ProductoCatalogoProjection {
     String getCodigo_barras();
     String getNombre_producto();
     Integer getCategoria_id();
+    String getCategoria_nombre();
     BigDecimal getPrecio_compra();
     BigDecimal getPrecio_venta();
     Integer getEstado();
     Long getStock_total_acumulado();
+    Boolean getMarca_baja();
 }
 

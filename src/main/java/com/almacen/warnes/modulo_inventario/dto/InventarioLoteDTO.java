@@ -78,6 +78,15 @@ public class InventarioLoteDTO {
     @JsonProperty("diasParaVencer")
     private Integer diasParaVencer;
 
+    @Schema(description = "Marca de baja lógica del lote", example = "false")
+    @JsonProperty("marcaBaja")
+    private Boolean marcaBaja;
+
+    @JsonProperty("marca_baja")
+    public Boolean getMarca_baja() {
+        return marcaBaja;
+    }
+
     @JsonProperty("inventario_id")
     public Integer getInventario_id() {
         return inventarioId;

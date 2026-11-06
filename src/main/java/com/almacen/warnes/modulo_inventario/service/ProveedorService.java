@@ -51,10 +51,11 @@ public class ProveedorService {
     }
 
     /**
-     * Lista distribuidores con filtros cruzados de empresa/contacto/contrato o producto suministrado
+     * Lista distribuidores con filtros cruzados de empresa/contacto/anotaciones, producto o estado (ACTIVOS/INACTIVOS/TODOS)
      */
-    public List<ProveedorListadoDTO> listarProveedores(String busqueda, String producto) {
-        List<ProveedorListadoProjection> projections = proveedorRepository.listarProveedores(busqueda, producto);
+    public List<ProveedorListadoDTO> listarProveedores(String busqueda, String producto, String estado) {
+        String estadoFiltro = (estado != null && !estado.trim().isEmpty()) ? estado.trim().toUpperCase() : "ACTIVOS";
+        List<ProveedorListadoProjection> projections = proveedorRepository.listarProveedores(busqueda, producto, estadoFiltro);
         return projections.stream().map(p -> ProveedorListadoDTO.builder()
                 .proveedorId(p.getProveedor_id())
                 .nombreEmpresa(p.getNombre_empresa())
@@ -130,6 +131,15 @@ public class ProveedorService {
     public void eliminarProveedor(Integer id) {
         log.info("Dando de baja logica al distribuidor ID: {}", id);
         proveedorProcedureRepository.ejecutarEliminarProveedor(id, 1);
+    }
+
+    @Transactional
+    public void reactivarProveedor(Integer id, Integer usuarioModificacion) {
+        log.info("Reactivando al distribuidor ID: {} por usuario {}", id, usuarioModificacion);
+        Proveedor p = proveedorRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Distribuidor no encontrado con ID: " + id));
+        p.setMarcaBaja(false);
+        proveedorRepository.save(p);
     }
 
     /**

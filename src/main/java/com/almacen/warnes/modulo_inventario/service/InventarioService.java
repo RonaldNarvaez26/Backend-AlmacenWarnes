@@ -5,6 +5,7 @@ import com.almacen.warnes.modulo_inventario.dto.projection.InventarioKpiProjecti
 import com.almacen.warnes.modulo_inventario.dto.projection.InventarioLoteProjection;
 import com.almacen.warnes.modulo_inventario.dto.projection.InventarioPendienteDetalleProjection;
 import com.almacen.warnes.modulo_inventario.dto.projection.ProductoCatalogoProjection;
+import com.almacen.warnes.modulo_inventario.entity.Concepto;
 import com.almacen.warnes.modulo_inventario.entity.Inventario;
 import com.almacen.warnes.modulo_inventario.entity.InventarioPendiente;
 import com.almacen.warnes.modulo_inventario.entity.Lote;
@@ -69,24 +70,34 @@ public class InventarioService {
         return inventarioRepository.obtenerKpiResumen();
     }
 
-    public List<InventarioLoteDTO> listarLotes() {
-        return inventarioRepository.listarLotes().stream()
+    public List<InventarioLoteDTO> listarLotes(String estado) {
+        String estadoFiltro = (estado != null && !estado.trim().isEmpty()) ? estado.trim().toUpperCase() : "ACTIVOS";
+        return inventarioRepository.listarLotes(estadoFiltro).stream()
                 .map(inventarioMapper::toLoteDTO)
                 .collect(Collectors.toList());
     }
 
-    public List<InventarioLoteProjection> listarLotesProyeccion() {
-        return inventarioRepository.listarLotes();
+    public List<InventarioLoteDTO> listarLotes() {
+        return listarLotes("ACTIVOS");
     }
 
-    public List<ProductoCatalogoDTO> listarCatalogo() {
-        return productoRepository.listarCatalogo().stream()
+    public List<InventarioLoteProjection> listarLotesProyeccion() {
+        return inventarioRepository.listarLotes("ACTIVOS");
+    }
+
+    public List<ProductoCatalogoDTO> listarCatalogo(String estado) {
+        String estadoFiltro = (estado != null && !estado.trim().isEmpty()) ? estado.trim().toUpperCase() : "ACTIVOS";
+        return productoRepository.listarCatalogo(estadoFiltro).stream()
                 .map(inventarioMapper::toCatalogoDTO)
                 .collect(Collectors.toList());
     }
 
+    public List<ProductoCatalogoDTO> listarCatalogo() {
+        return listarCatalogo("ACTIVOS");
+    }
+
     public List<ProductoCatalogoProjection> listarCatalogoProyeccion() {
-        return productoRepository.listarCatalogo();
+        return productoRepository.listarCatalogo("ACTIVOS");
     }
 
     // --- Sala de Espera (Paso 2) ---
@@ -120,10 +131,14 @@ public class InventarioService {
                         .fechaRevision(p.getFechaRevision())
                         .usuarioRevision(p.getUsuarioRevision())
                         .proveedorId(p.getProveedorId())
+                        .nombreProveedor(p.getNombreProveedor())
                         .descripcionLote(p.getDescripcionLote() != null ? p.getDescripcionLote() : "Lote " + p.getCodigoInterno())
                         .precioLote(precioLote)
                         .fechaVencimiento(p.getFechaVencimiento())
-                        .observacionRevision(observacionesPendientes.get(p.getInventarioPendienteId()))
+                        .observacionRevision(p.getObservacionRevision() != null ? p.getObservacionRevision() : observacionesPendientes.get(p.getInventarioPendienteId()))
+                        .fechaSubsanacion(p.getFechaSubsanacion())
+                        .nombreUsuarioCreacion(p.getNombreUsuarioCreacion())
+                        .nombreUsuarioRevision(p.getNombreUsuarioRevision())
                         .build();
             }).collect(Collectors.toList());
         }
@@ -173,7 +188,7 @@ public class InventarioService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Solo se pueden modificar registros pendientes en estado de espera (1) u observado (4)");
         }
 
-        // 2. Actualizar únicamente las columnas que existen físicamente en inventario_pendientes
+        // 2. Actualizar las columnas de inventario_pendientes
         if (dto.getNombreProducto() != null && !dto.getNombreProducto().trim().isEmpty()) {
             pendiente.setNombreProducto(dto.getNombreProducto().trim());
         }
@@ -195,6 +210,24 @@ public class InventarioService {
         if (dto.getProductoId() != null) {
             pendiente.setProductoId(dto.getProductoId());
         }
+        if (dto.getProveedorId() != null) {
+            pendiente.setProveedorId(dto.getProveedorId());
+        }
+        if (dto.getDescripcionLote() != null && !dto.getDescripcionLote().trim().isEmpty()) {
+            pendiente.setDescripcionLote(dto.getDescripcionLote().trim());
+        }
+        if (dto.getFechaVencimiento() != null) {
+            pendiente.setFechaVencimiento(dto.getFechaVencimiento());
+        }
+        if (dto.getObservacionRevision() != null) {
+            pendiente.setObservacionRevision(dto.getObservacionRevision().trim());
+            observacionesPendientes.put(id, dto.getObservacionRevision().trim());
+        }
+        if (dto.getFechaSubsanacion() != null) {
+            pendiente.setFechaSubsanacion(dto.getFechaSubsanacion());
+        } else {
+            pendiente.setFechaSubsanacion(LocalDateTime.now());
+        }
 
         // 3. Flujo 4 -> 1: Si estaba en estado 4 (observado) y el cajero lo rectifica, vuelve a estado 1 (Pendiente de Revisión)
         pendiente.setEstado(1);
@@ -204,13 +237,8 @@ public class InventarioService {
         // 4. Guardar los cambios usando el método .save() estándar de JPA
         InventarioPendiente actualizado = inventarioPendienteRepository.save(pendiente);
 
-        // 5. Devolver DTO preservando los datos del lote en tránsito
+        // 5. Devolver DTO persistido
         InventarioPendienteDTO responseDto = inventarioMapper.toPendienteDTO(actualizado);
-        responseDto.setProveedorId(dto.getProveedorId());
-        responseDto.setDescripcionLote(dto.getDescripcionLote());
-        responseDto.setPrecioLote(dto.getPrecioLote());
-        responseDto.setFechaVencimiento(dto.getFechaVencimiento());
-        responseDto.setObservacionRevision(observacionesPendientes.get(id));
         return responseDto;
     }
 
@@ -237,11 +265,19 @@ public class InventarioService {
             usuarioRevision = 1;
         }
 
-        // Resolucion de parametros del lote en transito (DTO / Consultas JPA con JOIN)
-        Integer proveedorId = (cambios != null) ? cambios.getProveedorId() : null;
-        String descripcionLote = (cambios != null) ? cambios.getDescripcionLote() : null;
-        BigDecimal precioLote = (cambios != null) ? cambios.getPrecioLote() : null;
-        LocalDate fechaVencimiento = (cambios != null) ? cambios.getFechaVencimiento() : null;
+        // Resolucion de parametros del lote (tomando de cambios si vienen, o de pendiente)
+        Integer proveedorId = (cambios != null && cambios.getProveedorId() != null)
+                ? cambios.getProveedorId()
+                : pendiente.getProveedorId();
+        String descripcionLote = (cambios != null && cambios.getDescripcionLote() != null && !cambios.getDescripcionLote().trim().isEmpty())
+                ? cambios.getDescripcionLote()
+                : pendiente.getDescripcionLote();
+        BigDecimal precioLote = (cambios != null && cambios.getPrecioLote() != null)
+                ? cambios.getPrecioLote()
+                : pendiente.getPrecioLote();
+        LocalDate fechaVencimiento = (cambios != null && cambios.getFechaVencimiento() != null)
+                ? cambios.getFechaVencimiento()
+                : pendiente.getFechaVencimiento();
 
         // Si es producto existente y no se envio proveedor, resolver el proveedor habitual mediante @Query con JOIN
         if (proveedorId == null && pendiente.getProductoId() != null) {
@@ -281,11 +317,12 @@ public class InventarioService {
         pendiente.setFechaRevision(LocalDateTime.now());
         pendiente.setUsuarioRevision(usuarioRevision);
 
-        inventarioPendienteRepository.save(pendiente);
-
         if (motivo != null && !motivo.trim().isEmpty()) {
+            pendiente.setObservacionRevision(motivo.trim());
             observacionesPendientes.put(id, motivo.trim());
         }
+
+        inventarioPendienteRepository.save(pendiente);
     }
 
     @Transactional
@@ -308,11 +345,12 @@ public class InventarioService {
         pendiente.setFechaRevision(LocalDateTime.now());
         pendiente.setUsuarioRevision(usuarioRevision);
 
-        inventarioPendienteRepository.save(pendiente);
-
         if (observacion != null && !observacion.trim().isEmpty()) {
+            pendiente.setObservacionRevision(observacion.trim());
             observacionesPendientes.put(id, observacion.trim());
         }
+
+        inventarioPendienteRepository.save(pendiente);
     }
 
     @Transactional
@@ -379,6 +417,55 @@ public class InventarioService {
         inventarioRepository.save(inventario);
     }
 
+    @Transactional
+    public void reactivarProducto(Integer productoId, Integer usuarioModificacion) {
+        Producto producto = productoRepository.findById(productoId)
+                .orElseThrow(() -> new IllegalArgumentException("Producto no encontrado con id: " + productoId));
+        producto.setMarcaBaja(false);
+        producto.setFechaModificacion(LocalDateTime.now());
+        producto.setUsuarioModificacion(usuarioModificacion != null ? usuarioModificacion : 1);
+        productoRepository.save(producto);
+    }
+
+    @Transactional
+    public void reactivarLoteInventario(Integer inventarioId, Integer usuarioModificacion) {
+        Inventario inventario = inventarioRepository.findById(inventarioId)
+                .orElseThrow(() -> new IllegalArgumentException("Registro de inventario no encontrado con id: " + inventarioId));
+
+        inventario.setMarcaBaja(false);
+        inventario.setFechaModificacion(LocalDateTime.now());
+        inventario.setUsuarioModificacion(usuarioModificacion != null ? usuarioModificacion : 1);
+
+        Lote lote = loteRepository.findById(inventario.getLoteId()).orElse(null);
+        if (lote != null) {
+            lote.setMarcaBaja(false);
+            loteRepository.save(lote);
+            if (inventario.getStock() == null || inventario.getStock() <= 0) {
+                inventario.setStock(lote.getCantidad() != null && lote.getCantidad() > 0 ? lote.getCantidad() : 1);
+            }
+        } else if (inventario.getStock() == null || inventario.getStock() <= 0) {
+            inventario.setStock(1);
+        }
+
+        inventarioRepository.save(inventario);
+    }
+
+    @Transactional
+    public void descontarUnidades(Integer inventarioId, DescontarUnidadesRequestDTO dto) {
+        if (inventarioId == null || inventarioId <= 0) {
+            throw new IllegalArgumentException("El identificador de inventario debe ser válido");
+        }
+        if (dto == null || dto.getCantidad() == null || dto.getCantidad() <= 0) {
+            throw new IllegalArgumentException("La cantidad a descontar debe ser mayor a cero");
+        }
+        inventarioProcedureRepository.ejecutarDescontarUnidades(
+                inventarioId,
+                dto.getCantidad(),
+                dto.getUsuarioId(),
+                dto.getMotivo()
+        );
+    }
+
     public List<ProveedorDTO> listarProveedoresActivos() {
         return proveedorRepository.findByMarcaBajaFalseOrderByNombreEmpresaAsc().stream()
                 .map(inventarioMapper::toProveedorDTO)
@@ -390,6 +477,76 @@ public class InventarioService {
                 .filter(c -> c.getCodigo() != null && c.getCodigo() > 0)
                 .map(inventarioMapper::toCategoriaDTO)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public List<CategoriaDTO> crearCategoria(CrearCategoriaRequestDTO request) {
+        if (request == null || request.getNombre() == null || request.getNombre().trim().isEmpty()) {
+            throw new IllegalArgumentException("El nombre de la categoría es obligatorio");
+        }
+        String nombre = request.getNombre().trim();
+        if (nombre.length() > 80) {
+            throw new IllegalArgumentException("El nombre de la categoría no puede superar los 80 caracteres");
+        }
+
+        boolean existe = conceptoRepository.existsByGrupoIdAndDescripcionIgnoreCaseAndMarcaBajaFalse(2, nombre);
+        if (existe) {
+            throw new IllegalArgumentException("Ya existe una categoría activa con el nombre '" + nombre + "'");
+        }
+
+        Integer siguienteCodigo = conceptoRepository.obtenerSiguienteCodigo(2);
+        Integer siguienteConceptoId = conceptoRepository.obtenerSiguienteConceptoIdSequence();
+
+        Concepto nuevoConcepto = Concepto.builder()
+                .conceptoId(siguienteConceptoId)
+                .grupoId(2)
+                .codigo(siguienteCodigo)
+                .descripcion(nombre)
+                .marcaBaja(false)
+                .fechaCreacion(LocalDateTime.now())
+                .usuarioCreacion(request.getUsuarioCreacion() != null ? request.getUsuarioCreacion() : 1)
+                .build();
+
+        conceptoRepository.saveAndFlush(nuevoConcepto);
+
+        return listarCategoriasActivas();
+    }
+
+    public List<CategoriaDTO> listarTodasCategorias() {
+        return conceptoRepository.findByGrupoIdAndCodigoGreaterThanOrderByCodigoAsc(2, 0).stream()
+                .map(inventarioMapper::toCategoriaDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public CategoriaDTO actualizarCategoria(Integer codigo, String nuevoNombre) {
+        if (codigo == null || codigo <= 0) {
+            throw new IllegalArgumentException("Código de categoría no válido");
+        }
+        if (nuevoNombre == null || nuevoNombre.trim().isEmpty()) {
+            throw new IllegalArgumentException("El nombre de la categoría no puede quedar vacío");
+        }
+        Concepto concepto = conceptoRepository.findByGrupoIdAndCodigo(2, codigo)
+                .orElseThrow(() -> new IllegalArgumentException("No se encontró la categoría con código: " + codigo));
+
+        concepto.setDescripcion(nuevoNombre.trim());
+        conceptoRepository.save(concepto);
+
+        return inventarioMapper.toCategoriaDTO(concepto);
+    }
+
+    @Transactional
+    public CategoriaDTO cambiarEstadoCategoria(Integer codigo, Boolean marcaBaja) {
+        if (codigo == null || codigo <= 0) {
+            throw new IllegalArgumentException("Código de categoría no válido");
+        }
+        Concepto concepto = conceptoRepository.findByGrupoIdAndCodigo(2, codigo)
+                .orElseThrow(() -> new IllegalArgumentException("No se encontró la categoría con código: " + codigo));
+
+        concepto.setMarcaBaja(Boolean.TRUE.equals(marcaBaja));
+        conceptoRepository.save(concepto);
+
+        return inventarioMapper.toCategoriaDTO(concepto);
     }
 
     private void aplicarCambiosAPendiente(InventarioPendiente pendiente, RegistroPendienteRequestDTO dto) {
@@ -416,6 +573,21 @@ public class InventarioService {
         }
         if (dto.getProductoId() != null) {
             pendiente.setProductoId(dto.getProductoId());
+        }
+        if (dto.getProveedorId() != null) {
+            pendiente.setProveedorId(dto.getProveedorId());
+        }
+        if (dto.getDescripcionLote() != null && !dto.getDescripcionLote().trim().isEmpty()) {
+            pendiente.setDescripcionLote(dto.getDescripcionLote().trim());
+        }
+        if (dto.getFechaVencimiento() != null) {
+            pendiente.setFechaVencimiento(dto.getFechaVencimiento());
+        }
+        if (dto.getObservacionRevision() != null) {
+            pendiente.setObservacionRevision(dto.getObservacionRevision().trim());
+        }
+        if (dto.getFechaSubsanacion() != null) {
+            pendiente.setFechaSubsanacion(dto.getFechaSubsanacion());
         }
     }
 }

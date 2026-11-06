@@ -22,9 +22,14 @@ public interface InventarioPendienteDetalleProjection {
     LocalDateTime getFechaRevision();
     Integer getUsuarioRevision();
 
-    // Campos del lote resueltos vía JOIN a nivel de consulta
+    // Campos del lote resueltos directamente desde columnas físicas y JOINs
     Integer getProveedorId();
     String getDescripcionLote();
     LocalDate getFechaVencimiento();
+    String getObservacionRevision();
+    LocalDateTime getFechaSubsanacion();
+    String getNombreUsuarioCreacion();
+    String getNombreUsuarioRevision();
+    String getNombreProveedor();
 }
 

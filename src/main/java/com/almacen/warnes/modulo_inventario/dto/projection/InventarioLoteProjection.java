@@ -20,5 +20,6 @@ public interface InventarioLoteProjection {
     LocalDate getFecha_vencimiento();
     String getNombre_proveedor();
     Integer getDias_para_vencer();
+    Boolean getMarca_baja();
 }
 

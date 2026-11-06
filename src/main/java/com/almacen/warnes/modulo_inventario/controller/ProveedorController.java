@@ -58,10 +58,31 @@ public class ProveedorController {
             @Parameter(description = "Texto para filtrar por nombre de empresa, contacto logístico o notas de contrato", example = "PIL Andina")
             @RequestParam(name = "busqueda", required = false) String busqueda,
             @Parameter(description = "Texto para filtrar proveedores que suministran un producto específico (por nombre, código interno o código de barras)", example = "Leche")
-            @RequestParam(name = "producto", required = false) String producto
+            @RequestParam(name = "producto", required = false) String producto,
+            @Parameter(description = "Filtro de estado: ACTIVOS, INACTIVOS, o TODOS", example = "ACTIVOS")
+            @RequestParam(name = "estado", required = false, defaultValue = "ACTIVOS") String estado,
+            @RequestParam(name = "estadoRegistro", required = false) String estadoRegistro,
+            @RequestParam(name = "marcaBaja", required = false) Boolean marcaBaja
     ) {
-        List<ProveedorListadoDTO> proveedores = proveedorService.listarProveedores(busqueda, producto);
+        String estadoFinal = resolverEstadoFiltro(estado, estadoRegistro, marcaBaja);
+        List<ProveedorListadoDTO> proveedores = proveedorService.listarProveedores(busqueda, producto, estadoFinal);
         return ResponseEntity.ok(proveedores);
+    }
+
+    private String resolverEstadoFiltro(String estado, String estadoRegistro, Boolean marcaBaja) {
+        if (Boolean.TRUE.equals(marcaBaja)) return "INACTIVOS";
+        if (Boolean.FALSE.equals(marcaBaja)) return "ACTIVOS";
+        if (estadoRegistro != null && !estadoRegistro.trim().isEmpty()) {
+            String er = estadoRegistro.trim().toUpperCase();
+            if (er.contains("BAJA") || er.contains("INACTIVO")) return "INACTIVOS";
+            if (er.contains("TODO")) return "TODOS";
+            if (er.contains("ACTIVO")) return "ACTIVOS";
+            return er;
+        }
+        if (estado != null && !estado.trim().isEmpty()) {
+            return estado.trim().toUpperCase();
+        }
+        return "ACTIVOS";
     }
 
     @Operation(
@@ -137,6 +158,19 @@ public class ProveedorController {
         proveedorService.eliminarProveedor(id);
         Map<String, String> response = new LinkedHashMap<>();
         response.put("mensaje", "Distribuidor dado de baja exitosamente");
+        return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "Reactivar o restaurar distribuidor dado de baja")
+    @PutMapping("/{id}/reactivar")
+    public ResponseEntity<Map<String, String>> reactivarProveedor(
+            @Parameter(description = "ID del distribuidor a reactivar", example = "1", required = true)
+            @PathVariable("id") Integer id,
+            @RequestParam(name = "usuarioModificacion", required = false) Integer usuarioModificacion
+    ) {
+        proveedorService.reactivarProveedor(id, usuarioModificacion != null ? usuarioModificacion : 1);
+        Map<String, String> response = new LinkedHashMap<>();
+        response.put("mensaje", "Distribuidor reactivado exitosamente");
         return ResponseEntity.ok(response);
     }
 

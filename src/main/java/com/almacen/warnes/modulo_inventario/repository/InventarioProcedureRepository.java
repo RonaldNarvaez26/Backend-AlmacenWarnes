@@ -175,4 +175,23 @@ public class InventarioProcedureRepository {
             return cs;
         });
     }
+
+    /**
+     * Llama al SP spInventarioDescontarUnidades para restar unidades físicas de inventario y lotes
+     */
+    public void ejecutarDescontarUnidades(Integer inventarioId, Integer cantidad, Integer usuarioId, String motivo) {
+        String sql = "CALL spInventarioDescontarUnidades(?, ?, ?, ?)";
+        jdbcTemplate.update(connection -> {
+            CallableStatement cs = connection.prepareCall(sql);
+            cs.setInt(1, inventarioId);
+            cs.setInt(2, cantidad);
+            cs.setInt(3, usuarioId != null ? usuarioId : 1);
+            if (motivo != null && !motivo.trim().isEmpty()) {
+                cs.setString(4, motivo.trim());
+            } else {
+                cs.setString(4, "Ajuste manual de stock");
+            }
+            return cs;
+        });
+    }
 }

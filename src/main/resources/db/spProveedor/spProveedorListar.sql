@@ -1,6 +1,7 @@
 CREATE OR REPLACE FUNCTION spProveedorListar(
     p_busqueda VARCHAR DEFAULT NULL,
-    p_producto VARCHAR DEFAULT NULL
+    p_producto VARCHAR DEFAULT NULL,
+    p_estado VARCHAR DEFAULT 'ACTIVOS'
 )
 RETURNS TABLE (
     proveedor_id INT,
@@ -23,6 +24,7 @@ AS $$
 DECLARE
     v_busqueda_limpia VARCHAR := NULLIF(TRIM(p_busqueda), '');
     v_producto_limpio VARCHAR := NULLIF(TRIM(p_producto), '');
+    v_estado_limpio VARCHAR := UPPER(COALESCE(TRIM(p_estado), 'ACTIVOS'));
 BEGIN
     RETURN QUERY
     SELECT
@@ -45,8 +47,12 @@ BEGIN
     FROM proveedores p
     LEFT JOIN lotes l ON l.proveedor_id = p.proveedor_id AND l.marca_baja = FALSE
     LEFT JOIN inventario i ON i.lote_id = l.lote_id AND i.marca_baja = FALSE
-    WHERE p.marca_baja = FALSE
-      -- Filtro por Empresa / Contacto / Contrato
+    WHERE (
+        v_estado_limpio = 'TODOS'
+        OR (v_estado_limpio = 'ACTIVOS' AND p.marca_baja = FALSE)
+        OR (v_estado_limpio IN ('INACTIVOS', 'BAJA') AND p.marca_baja = TRUE)
+    )
+      -- Filtro por Empresa / Contacto / Anotaciones
       AND (
           v_busqueda_limpia IS NULL
           OR p.nombre_empresa ILIKE '%' || v_busqueda_limpia || '%'
@@ -75,4 +81,3 @@ BEGIN
     ORDER BY p.nombre_empresa ASC;
 END;
 $$;
-

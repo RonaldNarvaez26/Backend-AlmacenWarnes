@@ -27,6 +27,10 @@ public interface ProductoRepository extends JpaRepository<Producto, Integer> {
     @Query(value = "SELECT spProductosGenerarCodigoInterno(:prefijo)", nativeQuery = true)
     String generarCodigoInterno(@Param("prefijo") String prefijo);
 
-    @Query(value = "SELECT * FROM spProductosListarCatalogo()", nativeQuery = true)
-    List<ProductoCatalogoProjection> listarCatalogo();
+    @Query(value = "SELECT * FROM spProductosListarCatalogo(:estado)", nativeQuery = true)
+    List<ProductoCatalogoProjection> listarCatalogo(@Param("estado") String estado);
+
+    default List<ProductoCatalogoProjection> listarCatalogo() {
+        return listarCatalogo("ACTIVOS");
+    }
 }
