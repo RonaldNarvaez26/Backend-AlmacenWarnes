@@ -2,6 +2,7 @@ package com.almacen.warnes.modulo_inventario.controller;
 
 import com.almacen.warnes.modulo_inventario.dto.*;
 import com.almacen.warnes.modulo_inventario.service.ProveedorService;
+import com.almacen.warnes.modulo_seguridad.util.SecurityContextHelper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -32,6 +33,7 @@ import java.util.Map;
 public class ProveedorController {
 
         private final ProveedorService proveedorService;
+        private final SecurityContextHelper securityContextHelper;
 
         @Operation(summary = "Obtener resumen de indicadores clave (KPIs)", description = "Ejecuta la función almacenada `spProveedorKpiResumen()` en PostgreSQL para calcular métricas cuantitativas: total de proveedores activos, proveedores con lotes en riesgo de caducidad (<= 7 días), total de productos distintos abastecidos, lotes activos y valorización total en inventario.")
         @ApiResponses({
@@ -39,16 +41,20 @@ public class ProveedorController {
                         @ApiResponse(responseCode = "500", description = "Error interno en la ejecución de la función de base de datos")
         })
         @GetMapping("/kpis")
-        public ResponseEntity<ProveedorKpiDTO> obtenerKpis() {
-                log.info("Consultando resumen de KPIs para distribuidores/proveedores");
-                ProveedorKpiDTO kpis = proveedorService.obtenerKpiResumen();
+        public ResponseEntity<ProveedorKpiDTO> obtenerKpis(
+                        @Parameter(description = "ID de la sucursal para filtrar KPIs (opcional para Propietarios)") @RequestParam(name = "sucursalId", required = false) Integer sucursalId,
+                        @Parameter(description = "ID del usuario que realiza la consulta") @RequestParam(name = "usuarioId", required = false) Integer usuarioId,
+                        @RequestHeader(name = "Authorization", required = false) String authHeader) {
+                Integer sucursalFiltro = securityContextHelper.resolverSucursalFiltro(sucursalId, usuarioId, authHeader);
+                log.info("Consultando resumen de KPIs para distribuidores/proveedores -> sucursal: {}", sucursalFiltro);
+                ProveedorKpiDTO kpis = proveedorService.obtenerKpiResumen(sucursalFiltro);
                 log.info("KPIs distribuidores calculados -> Total: {}, En Riesgo: {}, Total Lotes: {}",
                                 kpis.getTotalProveedoresActivos(), kpis.getProveedoresAlertasVencimiento(),
                                 kpis.getTotalLotesActivos());
                 return ResponseEntity.ok(kpis);
         }
 
-        @Operation(summary = "Listar distribuidores con filtros combinados", description = "Ejecuta la función almacenada `spProveedorListar(p_busqueda, p_producto)`. Permite realizar búsqueda por razón social, contacto o contrato, o cruzar relacionalmente buscando por el nombre o código del producto que el proveedor suministra.")
+        @Operation(summary = "Listar distribuidores con filtros combinados", description = "Ejecuta la función almacenada `spProveedorListar(p_busqueda, p_producto, p_estado, p_sucursal_id)`. Permite realizar búsqueda por razón social, contacto o contrato, o cruzar relacionalmente buscando por el nombre o código del producto que el proveedor suministra.")
         @ApiResponses({
                         @ApiResponse(responseCode = "200", description = "Listado de distribuidores obtenido correctamente")
         })
@@ -58,12 +64,16 @@ public class ProveedorController {
                         @Parameter(description = "Texto para filtrar proveedores que suministran un producto específico (por nombre, código interno o código de barras)", example = "Leche") @RequestParam(name = "producto", required = false) String producto,
                         @Parameter(description = "Filtro de estado: ACTIVOS, INACTIVOS, o TODOS", example = "ACTIVOS") @RequestParam(name = "estado", required = false, defaultValue = "ACTIVOS") String estado,
                         @RequestParam(name = "estadoRegistro", required = false) String estadoRegistro,
-                        @RequestParam(name = "marcaBaja", required = false) Boolean marcaBaja) {
+                        @RequestParam(name = "marcaBaja", required = false) Boolean marcaBaja,
+                        @Parameter(description = "ID de la sucursal para filtrar proveedores (opcional para Propietarios)") @RequestParam(name = "sucursalId", required = false) Integer sucursalId,
+                        @Parameter(description = "ID del usuario que realiza la consulta") @RequestParam(name = "usuarioId", required = false) Integer usuarioId,
+                        @RequestHeader(name = "Authorization", required = false) String authHeader) {
+                Integer sucursalFiltro = securityContextHelper.resolverSucursalFiltro(sucursalId, usuarioId, authHeader);
                 String estadoFinal = resolverEstadoFiltro(estado, estadoRegistro, marcaBaja);
-                log.info("Listando distribuidores -> filtro búsqueda: '{}', filtro producto: '{}', estado: '{}'",
-                                busqueda != null ? busqueda : "", producto != null ? producto : "", estadoFinal);
+                log.info("Listando distribuidores -> búsqueda: '{}', producto: '{}', estado: '{}', sucursal: {}",
+                                busqueda != null ? busqueda : "", producto != null ? producto : "", estadoFinal, sucursalFiltro);
                 List<ProveedorListadoDTO> proveedores = proveedorService.listarProveedores(busqueda, producto,
-                                estadoFinal);
+                                estadoFinal, sucursalFiltro);
                 log.info("Total distribuidores encontrados: {}", proveedores.size());
                 return ResponseEntity.ok(proveedores);
         }
@@ -115,10 +125,19 @@ public class ProveedorController {
                         @ApiResponse(responseCode = "409", description = "Conflicto: Ya existe un distribuidor activo con el mismo nombre comercial")
         })
         @PostMapping
-        public ResponseEntity<Map<String, Object>> registrarProveedor(
-                        @Valid @RequestBody CrearProveedorRequestDTO request) {
-                log.info("Registrando nuevo distribuidor -> Empresa: '{}', Contacto: '{}', Teléfono: '{}'",
-                                request.getNombreEmpresa(), request.getNombreContacto(), request.getNumeroContacto());
+        public ResponseEntity<?> registrarProveedor(
+                        @Valid @RequestBody CrearProveedorRequestDTO request,
+                        @RequestParam(name = "usuarioId", required = false) Integer usuarioId,
+                        @RequestHeader(name = "Authorization", required = false) String authHeader) {
+                Integer uid = request.getUsuarioCreacion() != null ? request.getUsuarioCreacion() : usuarioId;
+                if (!securityContextHelper.tienePermisoEscritura(uid, authHeader)) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                                        .body(Map.of("mensaje", "Acceso denegado: El rol Cajero solo tiene permisos de lectura sobre proveedores"));
+                }
+                Integer sucursalOp = securityContextHelper.resolverSucursalOperacion(request.getSucursalId(), uid, authHeader);
+                request.setSucursalId(sucursalOp);
+                log.info("Registrando nuevo distribuidor -> Empresa: '{}', Contacto: '{}', Teléfono: '{}', Sucursal: {}",
+                                request.getNombreEmpresa(), request.getNombreContacto(), request.getNumeroContacto(), request.getSucursalId());
                 Integer nuevoId = proveedorService.registrarProveedor(request);
                 log.info("Distribuidor registrado exitosamente con ID asignado: {}", nuevoId);
                 Map<String, Object> response = new LinkedHashMap<>();
@@ -135,11 +154,19 @@ public class ProveedorController {
                         @ApiResponse(responseCode = "409", description = "El nuevo nombre ya se encuentra en uso por otro distribuidor activo")
         })
         @PutMapping("/{id}")
-        public ResponseEntity<Map<String, String>> actualizarProveedor(
+        public ResponseEntity<?> actualizarProveedor(
                         @Parameter(description = "ID del distribuidor a modificar", example = "1", required = true) @PathVariable("id") Integer id,
-                        @Valid @RequestBody ActualizarProveedorRequestDTO request) {
-                log.info("Actualizando distribuidor ID: {}, nueva razón social: '{}', contacto: '{}'",
-                                id, request.getNombreEmpresa(), request.getNombreContacto());
+                        @Valid @RequestBody ActualizarProveedorRequestDTO request,
+                        @RequestParam(name = "usuarioId", required = false) Integer usuarioId,
+                        @RequestHeader(name = "Authorization", required = false) String authHeader) {
+                if (!securityContextHelper.tienePermisoEscritura(usuarioId, authHeader)) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                                        .body(Map.of("mensaje", "Acceso denegado: El rol Cajero solo tiene permisos de lectura sobre proveedores"));
+                }
+                Integer sucursalOp = securityContextHelper.resolverSucursalOperacion(request.getSucursalId(), usuarioId, authHeader);
+                request.setSucursalId(sucursalOp);
+                log.info("Actualizando distribuidor ID: {}, nueva razón social: '{}', contacto: '{}', Sucursal: {}",
+                                id, request.getNombreEmpresa(), request.getNombreContacto(), request.getSucursalId());
                 proveedorService.actualizarProveedor(id, request);
                 log.info("Distribuidor ID: {} actualizado exitosamente", id);
                 Map<String, String> response = new LinkedHashMap<>();
@@ -153,8 +180,14 @@ public class ProveedorController {
                         @ApiResponse(responseCode = "404", description = "El proveedor no existe o ya fue dado de baja previamente")
         })
         @DeleteMapping("/{id}")
-        public ResponseEntity<Map<String, String>> eliminarProveedor(
-                        @Parameter(description = "ID del distribuidor a dar de baja", example = "1", required = true) @PathVariable("id") Integer id) {
+        public ResponseEntity<?> eliminarProveedor(
+                        @Parameter(description = "ID del distribuidor a dar de baja", example = "1", required = true) @PathVariable("id") Integer id,
+                        @RequestParam(name = "usuarioId", required = false) Integer usuarioId,
+                        @RequestHeader(name = "Authorization", required = false) String authHeader) {
+                if (!securityContextHelper.tienePermisoEscritura(usuarioId, authHeader)) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                                        .body(Map.of("mensaje", "Acceso denegado: El rol Cajero no tiene permisos para dar de baja proveedores"));
+                }
                 log.info("Dando de baja lógica a distribuidor ID: {}", id);
                 proveedorService.eliminarProveedor(id);
                 log.info("Distribuidor ID: {} dado de baja exitosamente", id);
@@ -178,9 +211,14 @@ public class ProveedorController {
 
         @Operation(summary = "Reactivar o restaurar distribuidor dado de baja")
         @PutMapping("/{id}/reactivar")
-        public ResponseEntity<Map<String, String>> reactivarProveedor(
+        public ResponseEntity<?> reactivarProveedor(
                         @Parameter(description = "ID del distribuidor a reactivar", example = "1", required = true) @PathVariable("id") Integer id,
-                        @RequestParam(name = "usuarioModificacion", required = false) Integer usuarioModificacion) {
+                        @RequestParam(name = "usuarioModificacion", required = false) Integer usuarioModificacion,
+                        @RequestHeader(name = "Authorization", required = false) String authHeader) {
+                if (!securityContextHelper.tienePermisoEscritura(usuarioModificacion, authHeader)) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                                        .body(Map.of("mensaje", "Acceso denegado: El rol Cajero no tiene permisos para reactivar proveedores"));
+                }
                 log.info("Reactivando distribuidor ID: {} por usuario ID: {}", id,
                                 usuarioModificacion != null ? usuarioModificacion : 1);
                 proveedorService.reactivarProveedor(id, usuarioModificacion != null ? usuarioModificacion : 1);

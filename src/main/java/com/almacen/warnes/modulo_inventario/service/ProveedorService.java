@@ -30,7 +30,11 @@ public class ProveedorService {
      * Obtiene indicadores clave (KPIs) del módulo de proveedores
      */
     public ProveedorKpiDTO obtenerKpiResumen() {
-        ProveedorKpiProjection p = proveedorRepository.obtenerKpiResumen();
+        return obtenerKpiResumen(null);
+    }
+
+    public ProveedorKpiDTO obtenerKpiResumen(Integer sucursalId) {
+        ProveedorKpiProjection p = proveedorRepository.obtenerKpiResumen(sucursalId);
         if (p == null) {
             return ProveedorKpiDTO.builder()
                     .totalProveedoresActivos(0L)
@@ -51,13 +55,20 @@ public class ProveedorService {
     }
 
     /**
-     * Lista distribuidores con filtros cruzados de empresa/contacto/anotaciones, producto o estado (ACTIVOS/INACTIVOS/TODOS)
+     * Lista distribuidores con filtros cruzados de empresa/contacto/anotaciones, producto o estado (ACTIVOS/INACTIVOS/TODOS) y sucursal
      */
     public List<ProveedorListadoDTO> listarProveedores(String busqueda, String producto, String estado) {
+        return listarProveedores(busqueda, producto, estado, null);
+    }
+
+    public List<ProveedorListadoDTO> listarProveedores(String busqueda, String producto, String estado, Integer sucursalId) {
         String estadoFiltro = (estado != null && !estado.trim().isEmpty()) ? estado.trim().toUpperCase() : "ACTIVOS";
-        List<ProveedorListadoProjection> projections = proveedorRepository.listarProveedores(busqueda, producto, estadoFiltro);
+        List<ProveedorListadoProjection> projections = proveedorRepository.listarProveedores(busqueda, producto, estadoFiltro, sucursalId);
         return projections.stream().map(p -> ProveedorListadoDTO.builder()
                 .proveedorId(p.getProveedor_id())
+                .sucursalId(p.getSucursal_id())
+                .codigoSucursal(p.getCodigo_sucursal())
+                .ciudadSucursal(p.getCiudad_sucursal())
                 .nombreEmpresa(p.getNombre_empresa())
                 .nombreContacto(p.getNombre_contacto())
                 .numeroContacto(p.getNumero_contacto())
@@ -84,6 +95,7 @@ public class ProveedorService {
 
         return ProveedorDTO.builder()
                 .proveedorId(proveedor.getProveedorId())
+                .sucursalId(proveedor.getSucursalId())
                 .nombreEmpresa(proveedor.getNombreEmpresa())
                 .nombreContacto(proveedor.getNombreContacto())
                 .numeroContacto(proveedor.getNumeroContacto())
@@ -96,14 +108,16 @@ public class ProveedorService {
      */
     @Transactional
     public Integer registrarProveedor(CrearProveedorRequestDTO dto) {
-        log.info("Registrando distribuidor: {}", dto.getNombreEmpresa());
+        log.info("Registrando distribuidor: {} para sucursal: {}", dto.getNombreEmpresa(), dto.getSucursalId());
         Integer usuario = dto.getUsuarioCreacion() != null ? dto.getUsuarioCreacion() : 1;
+        Integer sucursal = dto.getSucursalId() != null ? dto.getSucursalId() : 1;
         return proveedorRepository.registrarProveedor(
                 dto.getNombreEmpresa(),
                 dto.getNombreContacto(),
                 dto.getNumeroContacto(),
                 dto.getAnotaciones(),
-                usuario
+                usuario,
+                sucursal
         );
     }
 
@@ -120,7 +134,8 @@ public class ProveedorService {
                 dto.getNombreContacto(),
                 dto.getNumeroContacto(),
                 dto.getAnotaciones(),
-                usuario
+                usuario,
+                dto.getSucursalId()
         );
     }
 

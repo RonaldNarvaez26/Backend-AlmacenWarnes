@@ -21,14 +21,20 @@ public interface InventarioRepository extends JpaRepository<Inventario, Integer>
 
     List<Inventario> findByProductoIdAndMarcaBajaFalse(Integer productoId);
 
-    @Query(value = "SELECT * FROM spInventarioKpiResumen()", nativeQuery = true)
-    InventarioKpiProjection obtenerKpiResumen();
+    @Query(value = "SELECT * FROM spInventarioKpiResumen(:sucursalId)", nativeQuery = true)
+    InventarioKpiProjection obtenerKpiResumen(@org.springframework.data.repository.query.Param("sucursalId") Integer sucursalId);
 
-    @Query(value = "SELECT * FROM spInventarioLotesListar(:estado)", nativeQuery = true)
-    List<InventarioLoteProjection> listarLotes(@org.springframework.data.repository.query.Param("estado") String estado);
+    default InventarioKpiProjection obtenerKpiResumen() {
+        return obtenerKpiResumen(null);
+    }
 
-    default List<InventarioLoteProjection> listarLotes() {
-        return listarLotes("ACTIVOS");
+    @Query(value = "SELECT * FROM spInventarioLotesListar(:estado, :sucursalId)", nativeQuery = true)
+    List<InventarioLoteProjection> listarLotes(
+            @org.springframework.data.repository.query.Param("estado") String estado,
+            @org.springframework.data.repository.query.Param("sucursalId") Integer sucursalId);
+
+    default List<InventarioLoteProjection> listarLotes(String estado) {
+        return listarLotes(estado, null);
     }
 }
 

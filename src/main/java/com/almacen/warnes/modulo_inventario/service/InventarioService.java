@@ -10,6 +10,7 @@ import com.almacen.warnes.modulo_inventario.entity.Inventario;
 import com.almacen.warnes.modulo_inventario.entity.InventarioPendiente;
 import com.almacen.warnes.modulo_inventario.entity.Lote;
 import com.almacen.warnes.modulo_inventario.entity.Producto;
+import com.almacen.warnes.modulo_inventario.entity.Proveedor;
 import com.almacen.warnes.modulo_inventario.mapper.InventarioMapper;
 import com.almacen.warnes.modulo_inventario.mapper.ProductoMapper;
 import com.almacen.warnes.modulo_inventario.repository.*;
@@ -44,6 +45,7 @@ public class InventarioService {
     private final ConceptoRepository conceptoRepository;
     private final InventarioMapper inventarioMapper;
     private final ProductoMapper productoMapper;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     // --- Consultas / Proyecciones (Paso 1) ---
 
@@ -61,43 +63,73 @@ public class InventarioService {
                 .build();
     }
 
-    public InventarioKpiDTO obtenerKpiResumen() {
-        InventarioKpiProjection projection = inventarioRepository.obtenerKpiResumen();
+    public InventarioKpiDTO obtenerKpiResumen(Integer sucursalId) {
+        InventarioKpiProjection projection = inventarioRepository.obtenerKpiResumen(sucursalId);
         return inventarioMapper.toKpiDTO(projection);
     }
 
-    public InventarioKpiProjection obtenerKpiResumenProyeccion() {
-        return inventarioRepository.obtenerKpiResumen();
+    public InventarioKpiDTO obtenerKpiResumen() {
+        return obtenerKpiResumen(null);
     }
 
-    public List<InventarioLoteDTO> listarLotes(String estado) {
+    public InventarioKpiProjection obtenerKpiResumenProyeccion(Integer sucursalId) {
+        return inventarioRepository.obtenerKpiResumen(sucursalId);
+    }
+
+    public InventarioKpiProjection obtenerKpiResumenProyeccion() {
+        return obtenerKpiResumenProyeccion(null);
+    }
+
+    public List<InventarioLoteDTO> listarLotes(String estado, Integer sucursalId) {
         String estadoFiltro = (estado != null && !estado.trim().isEmpty()) ? estado.trim().toUpperCase() : "ACTIVOS";
-        return inventarioRepository.listarLotes(estadoFiltro).stream()
+        return inventarioRepository.listarLotes(estadoFiltro, sucursalId).stream()
                 .map(inventarioMapper::toLoteDTO)
                 .collect(Collectors.toList());
     }
 
+    public List<InventarioLoteDTO> listarLotes(String estado) {
+        return listarLotes(estado, null);
+    }
+
     public List<InventarioLoteDTO> listarLotes() {
-        return listarLotes("ACTIVOS");
+        return listarLotes("ACTIVOS", null);
     }
 
     public List<InventarioLoteProjection> listarLotesProyeccion() {
-        return inventarioRepository.listarLotes("ACTIVOS");
+        return inventarioRepository.listarLotes("ACTIVOS", null);
     }
 
-    public List<ProductoCatalogoDTO> listarCatalogo(String estado) {
+    public List<ProductoCatalogoDTO> listarCatalogo(String estado, Integer sucursalId) {
         String estadoFiltro = (estado != null && !estado.trim().isEmpty()) ? estado.trim().toUpperCase() : "ACTIVOS";
-        return productoRepository.listarCatalogo(estadoFiltro).stream()
+        return productoRepository.listarCatalogo(estadoFiltro, sucursalId).stream()
                 .map(inventarioMapper::toCatalogoDTO)
                 .collect(Collectors.toList());
     }
 
+    public List<ProductoCatalogoDTO> listarCatalogo(String estado) {
+        return listarCatalogo(estado, null);
+    }
+
     public List<ProductoCatalogoDTO> listarCatalogo() {
-        return listarCatalogo("ACTIVOS");
+        return listarCatalogo("ACTIVOS", null);
     }
 
     public List<ProductoCatalogoProjection> listarCatalogoProyeccion() {
-        return productoRepository.listarCatalogo("ACTIVOS");
+        return productoRepository.listarCatalogo("ACTIVOS", null);
+    }
+
+    public List<SucursalDTO> listarSucursales() {
+        return jdbcTemplate.query(
+                "SELECT sucursal_id, codigo_interno, ciudad, direccion, telefono, marca_baja FROM sucursales WHERE marca_baja = false ORDER BY sucursal_id ASC",
+                (rs, rowNum) -> SucursalDTO.builder()
+                        .sucursalId(rs.getInt("sucursal_id"))
+                        .codigoInterno(rs.getString("codigo_interno"))
+                        .ciudad(rs.getString("ciudad"))
+                        .direccion(rs.getString("direccion"))
+                        .telefono(rs.getString("telefono"))
+                        .marcaBaja(rs.getBoolean("marca_baja"))
+                        .build()
+        );
     }
 
     // --- Sala de Espera (Paso 2) ---
@@ -106,8 +138,8 @@ public class InventarioService {
      * Lista registros en espera combinando la tabla inventario_pendientes con
      * el último lote conocido del producto mediante @Query con JOIN, sin tocar el esquema de BD.
      */
-    public List<InventarioPendienteDTO> listarPendientesActivos() {
-        List<InventarioPendienteDetalleProjection> projections = inventarioPendienteRepository.findAllConDetalleLote();
+    public List<InventarioPendienteDTO> listarPendientesActivos(Integer sucursalId) {
+        List<InventarioPendienteDetalleProjection> projections = inventarioPendienteRepository.findAllConDetalleLote(sucursalId);
         if (projections != null && !projections.isEmpty()) {
             return projections.stream().map(p -> {
                 BigDecimal precioLote = (p.getPrecioCompra() != null && p.getStockIngresado() != null)
@@ -116,6 +148,8 @@ public class InventarioService {
                 return InventarioPendienteDTO.builder()
                         .inventarioPendienteId(p.getInventarioPendienteId())
                         .sucursalId(p.getSucursalId())
+                        .codigoSucursal(p.getCodigoSucursal())
+                        .ciudadSucursal(p.getCiudadSucursal())
                         .productoId(p.getProductoId())
                         .nombreProducto(p.getNombreProducto())
                         .codigoBarras(p.getCodigoBarras())
@@ -137,19 +171,17 @@ public class InventarioService {
                         .fechaVencimiento(p.getFechaVencimiento())
                         .observacionRevision(p.getObservacionRevision() != null ? p.getObservacionRevision() : observacionesPendientes.get(p.getInventarioPendienteId()))
                         .fechaSubsanacion(p.getFechaSubsanacion())
-                        .nombreUsuarioCreacion(p.getNombreUsuarioCreacion())
-                        .nombreUsuarioRevision(p.getNombreUsuarioRevision())
+                        .nombreUsuarioCreacion(p.getNombreUsuarioCreacion() != null ? p.getNombreUsuarioCreacion() : p.getNombre_usuario_creacion())
+                        .rolUsuarioCreacion(p.getRolUsuarioCreacion() != null ? p.getRolUsuarioCreacion() : p.getRol_usuario_creacion())
+                        .nombreUsuarioRevision(p.getNombreUsuarioRevision() != null ? p.getNombreUsuarioRevision() : p.getNombre_usuario_revision())
                         .build();
             }).collect(Collectors.toList());
         }
+        return java.util.Collections.emptyList();
+    }
 
-        return inventarioPendienteRepository.findByMarcaBajaFalse().stream()
-                .map(item -> {
-                    InventarioPendienteDTO dto = inventarioMapper.toPendienteDTO(item);
-                    dto.setObservacionRevision(observacionesPendientes.get(item.getInventarioPendienteId()));
-                    return dto;
-                })
-                .collect(Collectors.toList());
+    public List<InventarioPendienteDTO> listarPendientesActivos() {
+        return listarPendientesActivos(null);
     }
 
     public InventarioPendienteDTO obtenerPendientePorId(Integer id) {
@@ -467,7 +499,14 @@ public class InventarioService {
     }
 
     public List<ProveedorDTO> listarProveedoresActivos() {
-        return proveedorRepository.findByMarcaBajaFalseOrderByNombreEmpresaAsc().stream()
+        return listarProveedoresActivos(null);
+    }
+
+    public List<ProveedorDTO> listarProveedoresActivos(Integer sucursalId) {
+        List<Proveedor> lista = (sucursalId != null)
+                ? proveedorRepository.findBySucursalIdAndMarcaBajaFalseOrderByNombreEmpresaAsc(sucursalId)
+                : proveedorRepository.findByMarcaBajaFalseOrderByNombreEmpresaAsc();
+        return lista.stream()
                 .map(inventarioMapper::toProveedorDTO)
                 .collect(Collectors.toList());
     }

@@ -18,6 +18,18 @@ public class ProveedorListadoDTO {
     @JsonProperty("proveedorId")
     private Integer proveedorId;
 
+    @Schema(description = "Identificador de la sucursal asignada", example = "1")
+    @JsonProperty("sucursalId")
+    private Integer sucursalId;
+
+    @Schema(description = "Código de la sucursal", example = "SUC-001")
+    @JsonProperty("codigoSucursal")
+    private String codigoSucursal;
+
+    @Schema(description = "Ciudad o nombre de la sucursal", example = "Warnes Central")
+    @JsonProperty("ciudadSucursal")
+    private String ciudadSucursal;
+
     @Schema(description = "Razón social de la empresa", example = "PIL Andina S.A.")
     @JsonProperty("nombreEmpresa")
     private String nombreEmpresa;

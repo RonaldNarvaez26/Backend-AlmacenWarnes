@@ -73,6 +73,11 @@ public class IngresoDirectoRequestDTO {
     @JsonAlias({"usuario_creacion", "id_usuario_creacion"})
     private Integer usuarioCreacion;
 
+    @Schema(description = "ID de la sucursal de destino", example = "1")
+    @JsonProperty("sucursalId")
+    @JsonAlias({"sucursal_id", "id_sucursal"})
+    private Integer sucursalId;
+
     @Schema(description = "ID del producto existente si ya se encuentra en catálogo", example = "2")
     @JsonProperty("productoId")
     @JsonAlias({"producto_id", "id_producto"})

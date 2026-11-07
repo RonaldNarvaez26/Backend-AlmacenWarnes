@@ -18,6 +18,9 @@ public class Proveedor {
     @Column(name = "proveedor_id")
     private Integer proveedorId;
 
+    @Column(name = "sucursal_id", nullable = false)
+    private Integer sucursalId;
+
     @Column(name = "nombre_empresa", nullable = false, length = 50)
     private String nombreEmpresa;
 

@@ -20,13 +20,13 @@ DECLARE
     v_descripcion_lote VARCHAR(100);
     v_precio_lote DECIMAL(8,2);
     v_fecha_vencimiento DATE;
-    v_sucursal_id INT := 1;
+    v_sucursal_id INT;
     v_nuevo_lote_id INT;
 BEGIN
-    -- Seleccionar columnas físicas incluyendo lote y vencimiento desde inventario_pendientes
-    SELECT producto_id, categoria_id, nombre_producto, codigo_barras, codigo_interno, 
+    -- Seleccionar columnas físicas incluyendo lote, sucursal_id y vencimiento desde inventario_pendientes
+    SELECT producto_id, sucursal_id, categoria_id, nombre_producto, codigo_barras, codigo_interno, 
            stock_ingresado, precio_compra, precio_venta, proveedor_id, descripcion_lote, fecha_vencimiento
-    INTO v_producto_id, v_categoria_id, v_nombre_producto, v_codigo_barras, v_codigo_interno,
+    INTO v_producto_id, v_sucursal_id, v_categoria_id, v_nombre_producto, v_codigo_barras, v_codigo_interno,
          v_stock_ingresado, v_precio_compra, v_precio_venta, v_proveedor_id, v_descripcion_lote, v_fecha_vencimiento
     FROM inventario_pendientes
     WHERE inventario_pendiente_id = p_inventario_pendiente_id
@@ -36,6 +36,9 @@ BEGIN
     IF v_nombre_producto IS NULL THEN
         RAISE EXCEPTION 'El registro pendiente con ID % no existe o ya fue procesado.', p_inventario_pendiente_id;
     END IF;
+
+    -- Garantizar sucursal válida (si viniera nula, por defecto 1)
+    v_sucursal_id := COALESCE(v_sucursal_id, 1);
 
     -- Priorizar parámetros de llamada si fueron explícitamente suministrados, de lo contrario conservar lo guardado en inventario_pendientes
     IF p_proveedor_id IS NOT NULL THEN
@@ -104,11 +107,12 @@ BEGIN
             FALSE,
             CURRENT_TIMESTAMP,
             p_usuario_revision
-        ) RETURNING producto_id INTO v_producto_id;
+        )
+        RETURNING producto_id INTO v_producto_id;
     ELSE
         UPDATE productos
         SET nombre_producto = v_nombre_producto,
-            categoria_id = v_categoria_id,
+            categoria_id = COALESCE(v_categoria_id, categoria_id),
             codigo_barras = COALESCE(NULLIF(TRIM(v_codigo_barras), ''), codigo_barras),
             precio_compra = v_precio_compra,
             precio_venta = v_precio_venta,
@@ -117,7 +121,7 @@ BEGIN
         WHERE producto_id = v_producto_id AND marca_baja = FALSE;
     END IF;
 
-    -- Insertar lote con los datos físicos recuperados de inventario_pendientes
+    -- Crear registro de lote físico
     INSERT INTO lotes (
         proveedor_id, descripcion, cantidad, precio_lote, costo_unitario,
         fecha_vencimiento, marca_baja, fecha_creacion, usuario_creacion
@@ -131,21 +135,31 @@ BEGIN
         FALSE,
         CURRENT_TIMESTAMP,
         p_usuario_revision
-    ) RETURNING lote_id INTO v_nuevo_lote_id;
+    )
+    RETURNING lote_id INTO v_nuevo_lote_id;
 
-    -- Insertar en inventario de sucursal
+    -- Crear el registro en inventario físico con sucursal_id real
     INSERT INTO inventario (
         sucursal_id, lote_id, producto_id, stock, en_descuento,
-        precio_descuento, marca_baja, fecha_creacion, usuario_creacion
+        marca_baja, fecha_creacion, usuario_creacion
     ) VALUES (
-        v_sucursal_id, v_nuevo_lote_id, v_producto_id, v_stock_ingresado, FALSE,
-        NULL, FALSE, CURRENT_TIMESTAMP, p_usuario_revision
+        v_sucursal_id,
+        v_nuevo_lote_id,
+        v_producto_id,
+        v_stock_ingresado,
+        FALSE,
+        FALSE,
+        CURRENT_TIMESTAMP,
+        p_usuario_revision
     );
 
-    -- Actualizar estado a 2 (Aprobado)
+    -- Marcar como aprobado en inventario_pendientes
     UPDATE inventario_pendientes
     SET estado = 2,
         producto_id = v_producto_id,
+        proveedor_id = v_proveedor_id,
+        descripcion_lote = v_descripcion_lote,
+        fecha_vencimiento = v_fecha_vencimiento,
         fecha_revision = CURRENT_TIMESTAMP,
         usuario_revision = p_usuario_revision
     WHERE inventario_pendiente_id = p_inventario_pendiente_id;

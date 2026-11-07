@@ -21,5 +21,7 @@ public interface InventarioLoteProjection {
     String getNombre_proveedor();
     Integer getDias_para_vencer();
     Boolean getMarca_baja();
+    Integer getSucursal_id();
+    String getCodigo_sucursal();
+    String getCiudad_sucursal();
 }
-

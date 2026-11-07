@@ -48,6 +48,9 @@ public class InventarioMapper {
                 .nombreProveedor(projection.getNombre_proveedor())
                 .diasParaVencer(projection.getDias_para_vencer())
                 .marcaBaja(projection.getMarca_baja())
+                .sucursalId(projection.getSucursal_id())
+                .codigoSucursal(projection.getCodigo_sucursal())
+                .ciudadSucursal(projection.getCiudad_sucursal())
                 .build();
     }
 
@@ -133,6 +136,7 @@ public class InventarioMapper {
         }
         return ProveedorDTO.builder()
                 .proveedorId(entity.getProveedorId())
+                .sucursalId(entity.getSucursalId())
                 .nombreEmpresa(entity.getNombreEmpresa())
                 .nombreContacto(entity.getNombreContacto())
                 .numeroContacto(entity.getNumeroContacto())

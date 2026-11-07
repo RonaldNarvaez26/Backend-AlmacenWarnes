@@ -22,9 +22,10 @@ public class ProveedorProcedureRepository {
             String nombreContacto,
             String numeroContacto,
             String anotaciones,
-            Integer usuarioModificacion
+            Integer usuarioModificacion,
+            Integer sucursalId
     ) {
-        String sql = "CALL spProveedorActualizar(?, ?, ?, ?, ?, ?)";
+        String sql = "CALL spProveedorActualizar(?, ?, ?, ?, ?, ?, ?)";
         jdbcTemplate.update(connection -> {
             CallableStatement cs = connection.prepareCall(sql);
             cs.setInt(1, proveedorId);
@@ -37,8 +38,24 @@ public class ProveedorProcedureRepository {
             } else {
                 cs.setInt(6, 1);
             }
+            if (sucursalId != null) {
+                cs.setInt(7, sucursalId);
+            } else {
+                cs.setNull(7, Types.INTEGER);
+            }
             return cs;
         });
+    }
+
+    public void ejecutarActualizarProveedor(
+            Integer proveedorId,
+            String nombreEmpresa,
+            String nombreContacto,
+            String numeroContacto,
+            String anotaciones,
+            Integer usuarioModificacion
+    ) {
+        ejecutarActualizarProveedor(proveedorId, nombreEmpresa, nombreContacto, numeroContacto, anotaciones, usuarioModificacion, null);
     }
 
     /**

@@ -23,6 +23,20 @@ public class InventarioPendienteDTO {
     @JsonProperty("sucursalId")
     private Integer sucursalId;
 
+    @Schema(description = "Código de la sucursal", example = "SUC-001")
+    @JsonProperty("codigoSucursal")
+    private String codigoSucursal;
+
+    @Schema(description = "Ciudad de la sucursal", example = "Warnes Central")
+    @JsonProperty("ciudadSucursal")
+    private String ciudadSucursal;
+
+    @JsonProperty("codigo_sucursal")
+    public String getCodigo_sucursal() { return codigoSucursal; }
+
+    @JsonProperty("ciudad_sucursal")
+    public String getCiudad_sucursal() { return ciudadSucursal; }
+
     @Schema(description = "ID del producto vinculado en catálogo (si existe)", example = "1")
     @JsonProperty("productoId")
     private Integer productoId;
@@ -86,6 +100,10 @@ public class InventarioPendienteDTO {
     @Schema(description = "Nombre completo del usuario que creó el registro", example = "Ana Maria Flores Condori")
     @JsonProperty("nombreUsuarioCreacion")
     private String nombreUsuarioCreacion;
+
+    @Schema(description = "Rol del usuario que creó el registro", example = "Cajero")
+    @JsonProperty("rolUsuarioCreacion")
+    private String rolUsuarioCreacion;
 
     @Schema(description = "Nombre completo del supervisor que revisó el registro", example = "Carlos Eduardo Mendoza Quispe")
     @JsonProperty("nombreUsuarioRevision")
@@ -171,6 +189,9 @@ public class InventarioPendienteDTO {
 
     @JsonProperty("nombre_usuario_creacion")
     public String getNombre_usuario_creacion() { return nombreUsuarioCreacion; }
+
+    @JsonProperty("rol_usuario_creacion")
+    public String getRol_usuario_creacion() { return rolUsuarioCreacion; }
 
     @JsonProperty("nombre_usuario_revision")
     public String getNombre_usuario_revision() { return nombreUsuarioRevision; }

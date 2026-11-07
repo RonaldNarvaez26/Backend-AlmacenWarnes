@@ -19,23 +19,27 @@ public interface ProveedorRepository extends JpaRepository<Proveedor, Integer> {
 
     List<Proveedor> findByMarcaBajaFalseOrderByNombreEmpresaAsc();
 
-    @Query(value = "SELECT * FROM spProveedorKpiResumen()", nativeQuery = true)
-    ProveedorKpiProjection obtenerKpiResumen();
+    List<Proveedor> findBySucursalIdAndMarcaBajaFalseOrderByNombreEmpresaAsc(Integer sucursalId);
 
-    @Query(value = "SELECT * FROM spProveedorListar(:busqueda, :producto, :estado)", nativeQuery = true)
+    @Query(value = "SELECT * FROM spProveedorKpiResumen(:sucursalId)", nativeQuery = true)
+    ProveedorKpiProjection obtenerKpiResumen(@Param("sucursalId") Integer sucursalId);
+
+    @Query(value = "SELECT * FROM spProveedorListar(:busqueda, :producto, :estado, :sucursalId)", nativeQuery = true)
     List<ProveedorListadoProjection> listarProveedores(
             @Param("busqueda") String busqueda,
             @Param("producto") String producto,
-            @Param("estado") String estado
+            @Param("estado") String estado,
+            @Param("sucursalId") Integer sucursalId
     );
 
-    @Query(value = "SELECT spProveedorRegistrar(:nombreEmpresa, :nombreContacto, :numeroContacto, :anotaciones, :usuarioCreacion)", nativeQuery = true)
+    @Query(value = "SELECT spProveedorRegistrar(:nombreEmpresa, :nombreContacto, :numeroContacto, :anotaciones, :usuarioCreacion, :sucursalId)", nativeQuery = true)
     Integer registrarProveedor(
             @Param("nombreEmpresa") String nombreEmpresa,
             @Param("nombreContacto") String nombreContacto,
             @Param("numeroContacto") String numeroContacto,
             @Param("anotaciones") String anotaciones,
-            @Param("usuarioCreacion") Integer usuarioCreacion
+            @Param("usuarioCreacion") Integer usuarioCreacion,
+            @Param("sucursalId") Integer sucursalId
     );
 
     @Query(value = "SELECT * FROM spProveedorCatalogoProductos(:proveedorId)", nativeQuery = true)

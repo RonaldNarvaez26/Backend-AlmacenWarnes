@@ -32,6 +32,7 @@ import java.util.Map;
 public class InventarioController {
 
         private final InventarioService inventarioService;
+        private final com.almacen.warnes.modulo_seguridad.util.SecurityContextHelper securityContextHelper;
 
         // --- Endpoints de Consulta / Proyecciones (Paso 1) ---
 
@@ -48,14 +49,18 @@ public class InventarioController {
                 return ResponseEntity.ok(dto);
         }
 
-        @Operation(summary = "Obtener resumen de métricas clave (KPIs) de inventario", description = "Ejecuta la función almacenada `spInventarioKpiResumen()`. Calcula en tiempo real: productos en catálogo, unidades en stock activo, lotes en sala de espera y alertas de caducidad.")
+        @Operation(summary = "Obtener resumen de métricas clave (KPIs) de inventario", description = "Ejecuta la función almacenada `spInventarioKpiResumen(:sucursalId)`. Calcula en tiempo real: productos en catálogo, unidades en stock activo, lotes en sala de espera y alertas de caducidad, filtrable por sucursal.")
         @ApiResponses({
                         @ApiResponse(responseCode = "200", description = "KPIs calculados exitosamente", content = @Content(schema = @Schema(implementation = InventarioKpiDTO.class)))
         })
         @GetMapping("/kpis")
-        public ResponseEntity<InventarioKpiDTO> obtenerKpis() {
-                log.info("Consultando KPIs de resumen de inventario");
-                InventarioKpiDTO kpis = inventarioService.obtenerKpiResumen();
+        public ResponseEntity<InventarioKpiDTO> obtenerKpis(
+                        @RequestParam(name = "sucursalId", required = false) Integer sucursalId,
+                        @RequestParam(name = "usuarioId", required = false) Integer usuarioId,
+                        @RequestHeader(name = "Authorization", required = false) String authHeader) {
+                Integer sucursalFinal = securityContextHelper.resolverSucursalFiltro(sucursalId, usuarioId, authHeader);
+                log.info("Consultando KPIs de resumen de inventario (sucursalId: {})", sucursalFinal);
+                InventarioKpiDTO kpis = inventarioService.obtenerKpiResumen(sucursalFinal);
                 log.info("KPIs calculados -> Catálogo: {}, Stock Activo: {}, Sala Espera: {}, Alertas Caducidad: {}",
                                 kpis.getTotalProductosCatalogo(), kpis.getUnidadesStockActivo(),
                                 kpis.getLotesSalaEspera(), kpis.getAlertasVencimiento());
@@ -70,10 +75,14 @@ public class InventarioController {
         public ResponseEntity<List<InventarioLoteDTO>> listarLotes(
                         @RequestParam(name = "estado", required = false, defaultValue = "ACTIVOS") String estado,
                         @RequestParam(name = "estadoRegistro", required = false) String estadoRegistro,
-                        @RequestParam(name = "marcaBaja", required = false) Boolean marcaBaja) {
+                        @RequestParam(name = "marcaBaja", required = false) Boolean marcaBaja,
+                        @RequestParam(name = "sucursalId", required = false) Integer sucursalId,
+                        @RequestParam(name = "usuarioId", required = false) Integer usuarioId,
+                        @RequestHeader(name = "Authorization", required = false) String authHeader) {
                 String estadoFinal = resolverEstadoFiltro(estado, estadoRegistro, marcaBaja);
-                log.info("Consultando listado de inventario activo por lotes (filtro: '{}')", estadoFinal);
-                List<InventarioLoteDTO> lotes = inventarioService.listarLotes(estadoFinal);
+                Integer sucursalFinal = securityContextHelper.resolverSucursalFiltro(sucursalId, usuarioId, authHeader);
+                log.info("Consultando listado de inventario activo por lotes (filtro: '{}', sucursalId: {})", estadoFinal, sucursalFinal);
+                List<InventarioLoteDTO> lotes = inventarioService.listarLotes(estadoFinal, sucursalFinal);
                 log.info("Total de lotes de inventario recuperados: {}", lotes.size());
                 return ResponseEntity.ok(lotes);
         }
@@ -86,10 +95,14 @@ public class InventarioController {
         public ResponseEntity<List<ProductoCatalogoDTO>> listarCatalogo(
                         @RequestParam(name = "estado", required = false, defaultValue = "ACTIVOS") String estado,
                         @RequestParam(name = "estadoRegistro", required = false) String estadoRegistro,
-                        @RequestParam(name = "marcaBaja", required = false) Boolean marcaBaja) {
+                        @RequestParam(name = "marcaBaja", required = false) Boolean marcaBaja,
+                        @RequestParam(name = "sucursalId", required = false) Integer sucursalId,
+                        @RequestParam(name = "usuarioId", required = false) Integer usuarioId,
+                        @RequestHeader(name = "Authorization", required = false) String authHeader) {
                 String estadoFinal = resolverEstadoFiltro(estado, estadoRegistro, marcaBaja);
-                log.info("Consultando catálogo maestro con stock acumulado (filtro: '{}')", estadoFinal);
-                List<ProductoCatalogoDTO> catalogo = inventarioService.listarCatalogo(estadoFinal);
+                Integer sucursalFinal = securityContextHelper.resolverSucursalFiltro(sucursalId, usuarioId, authHeader);
+                log.info("Consultando catálogo maestro con stock acumulado (filtro: '{}', sucursalId: {})", estadoFinal, sucursalFinal);
+                List<ProductoCatalogoDTO> catalogo = inventarioService.listarCatalogo(estadoFinal, sucursalFinal);
                 log.info("Catálogo maestro cargado con {} productos registrados", catalogo.size());
                 return ResponseEntity.ok(catalogo);
         }
@@ -115,6 +128,17 @@ public class InventarioController {
                 return "ACTIVOS";
         }
 
+        @Operation(summary = "Listar sucursales activas", description = "Retorna el listado de sucursales físicas activas del sistema para el selector de sucursal.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Listado de sucursales obtenido exitosamente")
+        })
+        @GetMapping("/sucursales")
+        public ResponseEntity<List<SucursalDTO>> listarSucursales() {
+                log.info("Consultando listado de sucursales activas");
+                List<SucursalDTO> sucursales = inventarioService.listarSucursales();
+                return ResponseEntity.ok(sucursales);
+        }
+
         // --- Endpoints de Sala de Espera (Paso 2) ---
 
         @Operation(summary = "Listar registros pendientes en Sala de Espera", description = "Consulta `inventario_pendientes` combinando en tránsito los datos de lotes y proveedores mediante consulta optimizada con JOIN sin alterar el esquema físico de la base de datos.")
@@ -122,9 +146,13 @@ public class InventarioController {
                         @ApiResponse(responseCode = "200", description = "Lista de mercadería en espera de auditoría")
         })
         @GetMapping("/pendientes")
-        public ResponseEntity<List<InventarioPendienteDTO>> listarPendientes() {
-                log.info("Consultando registros pendientes en Sala de Espera");
-                List<InventarioPendienteDTO> lista = inventarioService.listarPendientesActivos();
+        public ResponseEntity<List<InventarioPendienteDTO>> listarPendientes(
+                        @RequestParam(name = "sucursalId", required = false) Integer sucursalId,
+                        @RequestParam(name = "usuarioId", required = false) Integer usuarioId,
+                        @RequestHeader(name = "Authorization", required = false) String authHeader) {
+                Integer sucursalFinal = securityContextHelper.resolverSucursalFiltro(sucursalId, usuarioId, authHeader);
+                log.info("Consultando registros pendientes en Sala de Espera (sucursalId: {})", sucursalFinal);
+                List<InventarioPendienteDTO> lista = inventarioService.listarPendientesActivos(sucursalFinal);
                 log.info("Total de registros en Sala de Espera recuperados: {}", lista.size());
                 return ResponseEntity.ok(lista);
         }
@@ -136,7 +164,10 @@ public class InventarioController {
         })
         @PostMapping("/pendientes")
         public ResponseEntity<InventarioPendienteDTO> registrarPendiente(
-                        @Valid @RequestBody RegistroPendienteRequestDTO dto) {
+                        @Valid @RequestBody RegistroPendienteRequestDTO dto,
+                        @RequestHeader(name = "Authorization", required = false) String authHeader) {
+                Integer sucursalOp = securityContextHelper.resolverSucursalOperacion(dto.getSucursalId(), dto.getUsuarioCreacion(), authHeader);
+                dto.setSucursalId(sucursalOp);
                 log.info("Registrando ingreso a Sala de Espera -> Producto: '{}', Stock: {}, Proveedor ID: {}, Sucursal ID: {}",
                                 dto.getNombreProducto(), dto.getStockIngresado(), dto.getProveedorId(),
                                 dto.getSucursalId());
@@ -168,10 +199,15 @@ public class InventarioController {
                         @ApiResponse(responseCode = "404", description = "Registro pendiente no encontrado")
         })
         @PutMapping("/pendientes/{id}/aprobar")
-        public ResponseEntity<Map<String, Object>> aprobarPendiente(
+        public ResponseEntity<?> aprobarPendiente(
                         @Parameter(description = "ID del registro pendiente", example = "101", required = true) @PathVariable Integer id,
                         @RequestBody(required = false) RegistroPendienteRequestDTO cambios,
-                        @Parameter(description = "ID del supervisor auditor", example = "2") @RequestParam(name = "usuarioRevision", required = false) Integer usuarioRevision) {
+                        @Parameter(description = "ID del supervisor auditor", example = "2") @RequestParam(name = "usuarioRevision", required = false) Integer usuarioRevision,
+                        @RequestHeader(name = "Authorization", required = false) String authHeader) {
+                if (!securityContextHelper.tienePermisoEscritura(usuarioRevision, authHeader)) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                                        .body(Map.of("mensaje", "Acceso denegado: El rol Cajero no tiene permisos para aprobar mercadería en Sala de Espera"));
+                }
                 log.info("Supervisor ID: {} iniciando aprobación de mercadería en Sala de Espera ID: {}",
                                 usuarioRevision, id);
                 inventarioService.aprobarPendiente(id, cambios, usuarioRevision);
@@ -188,10 +224,15 @@ public class InventarioController {
                         @ApiResponse(responseCode = "400", description = "El registro ya fue procesado previamente")
         })
         @PutMapping("/pendientes/{id}/rechazar")
-        public ResponseEntity<Map<String, Object>> rechazarPendiente(
+        public ResponseEntity<?> rechazarPendiente(
                         @Parameter(description = "ID del registro pendiente", example = "101", required = true) @PathVariable Integer id,
                         @Parameter(description = "Motivo del rechazo", example = "Mercadería dañada o empaque roto") @RequestParam(name = "motivo", required = false) String motivo,
-                        @Parameter(description = "ID del supervisor auditor", example = "2") @RequestParam(name = "usuarioRevision", required = false) Integer usuarioRevision) {
+                        @Parameter(description = "ID del supervisor auditor", example = "2") @RequestParam(name = "usuarioRevision", required = false) Integer usuarioRevision,
+                        @RequestHeader(name = "Authorization", required = false) String authHeader) {
+                if (!securityContextHelper.tienePermisoEscritura(usuarioRevision, authHeader)) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                                        .body(Map.of("mensaje", "Acceso denegado: El rol Cajero no tiene permisos para rechazar mercadería en Sala de Espera"));
+                }
                 log.info("Supervisor ID: {} rechazando ingreso en Sala de Espera ID: {}, motivo: '{}'", usuarioRevision,
                                 id, motivo);
                 inventarioService.rechazarPendiente(id, motivo, usuarioRevision);
@@ -209,10 +250,15 @@ public class InventarioController {
                         @ApiResponse(responseCode = "404", description = "Registro pendiente no encontrado")
         })
         @PutMapping("/pendientes/{id}/observar")
-        public ResponseEntity<Map<String, Object>> observarPendiente(
+        public ResponseEntity<?> observarPendiente(
                         @Parameter(description = "ID del registro pendiente", example = "101", required = true) @PathVariable Integer id,
                         @Parameter(description = "Instrucción u observación de corrección para el cajero", example = "Precio de compra inconsistente con factura, verificar por favor") @RequestParam(name = "observacion", required = false) String observacion,
-                        @Parameter(description = "ID del supervisor auditor", example = "2") @RequestParam(name = "usuarioRevision", required = false) Integer usuarioRevision) {
+                        @Parameter(description = "ID del supervisor auditor", example = "2") @RequestParam(name = "usuarioRevision", required = false) Integer usuarioRevision,
+                        @RequestHeader(name = "Authorization", required = false) String authHeader) {
+                if (!securityContextHelper.tienePermisoEscritura(usuarioRevision, authHeader)) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                                        .body(Map.of("mensaje", "Acceso denegado: El rol Cajero no tiene permisos para observar mercadería en Sala de Espera"));
+                }
                 log.info("Supervisor ID: {} observando mercadería en Sala de Espera ID: {}, observación: '{}'",
                                 usuarioRevision, id, observacion);
                 inventarioService.observarPendiente(id, observacion, usuarioRevision);
@@ -230,11 +276,18 @@ public class InventarioController {
                         @ApiResponse(responseCode = "409", description = "Conflicto: Código de barras duplicado en otro producto")
         })
         @PostMapping("/ingreso-directo")
-        public ResponseEntity<Map<String, String>> ingresoDirectoSupervisor(
-                        @Valid @RequestBody IngresoDirectoRequestDTO dto) {
-                log.info("Supervisor registrando ingreso directo -> Producto: '{}', Categoría: {}, Cantidad: {}, Costo Lote: {}",
+        public ResponseEntity<?> ingresoDirectoSupervisor(
+                        @Valid @RequestBody IngresoDirectoRequestDTO dto,
+                        @RequestHeader(name = "Authorization", required = false) String authHeader) {
+                if (!securityContextHelper.tienePermisoEscritura(dto.getUsuarioCreacion(), authHeader)) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                                        .body(Map.of("mensaje", "Acceso denegado: El rol Cajero no tiene permisos para realizar ingreso directo"));
+                }
+                Integer sucursalOp = securityContextHelper.resolverSucursalOperacion(dto.getSucursalId(), dto.getUsuarioCreacion(), authHeader);
+                dto.setSucursalId(sucursalOp);
+                log.info("Supervisor registrando ingreso directo -> Producto: '{}', Categoría: {}, Cantidad: {}, Costo Lote: {}, Sucursal: {}",
                                 dto.getNombreProducto(), dto.getCategoriaId(), dto.getStockIngresado(),
-                                dto.getPrecioLote());
+                                dto.getPrecioLote(), dto.getSucursalId());
                 inventarioService.ingresoDirectoSupervisor(dto);
                 log.info("Ingreso directo asentado exitosamente en catálogo, lotes e inventario");
                 Map<String, String> response = new LinkedHashMap<>();
@@ -404,9 +457,13 @@ public class InventarioController {
                         @ApiResponse(responseCode = "200", description = "Listado de proveedores activos")
         })
         @GetMapping("/proveedores")
-        public ResponseEntity<List<ProveedorDTO>> listarProveedores() {
-                log.info("Consultando lista auxiliar de proveedores activos para selectores de inventario");
-                List<ProveedorDTO> lista = inventarioService.listarProveedoresActivos();
+        public ResponseEntity<List<ProveedorDTO>> listarProveedores(
+                        @Parameter(description = "ID de la sucursal para filtrar proveedores (opcional para Propietarios)") @RequestParam(name = "sucursalId", required = false) Integer sucursalId,
+                        @Parameter(description = "ID del usuario que realiza la consulta") @RequestParam(name = "usuarioId", required = false) Integer usuarioId,
+                        @RequestHeader(name = "Authorization", required = false) String authHeader) {
+                Integer sucursalFiltro = securityContextHelper.resolverSucursalFiltro(sucursalId, usuarioId, authHeader);
+                log.info("Consultando lista auxiliar de proveedores activos para selectores de inventario -> sucursal: {}", sucursalFiltro);
+                List<ProveedorDTO> lista = inventarioService.listarProveedoresActivos(sucursalFiltro);
                 log.info("Total de proveedores activos para selector: {}", lista.size());
                 return ResponseEntity.ok(lista);
         }

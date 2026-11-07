@@ -80,7 +80,7 @@ public class InventarioProcedureRepository {
     }
 
     public void ejecutarIngresoDirectoSupervisor(IngresoDirectoRequestDTO dto) {
-        String sql = "CALL spInventarioIngresoDirectoSupervisor(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql = "CALL spInventarioIngresoDirectoSupervisor(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         jdbcTemplate.update(connection -> {
             CallableStatement cs = connection.prepareCall(sql);
 
@@ -171,6 +171,10 @@ public class InventarioProcedureRepository {
             // 13. p_usuario_creacion INT
             int usuarioCreacion = (dto.getUsuarioCreacion() != null) ? dto.getUsuarioCreacion() : 1;
             cs.setInt(13, usuarioCreacion);
+
+            // 14. p_sucursal_id INT
+            int sucursalId = (dto.getSucursalId() != null) ? dto.getSucursalId() : 1;
+            cs.setInt(14, sucursalId);
 
             return cs;
         });

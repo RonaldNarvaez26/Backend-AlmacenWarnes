@@ -1,8 +1,10 @@
 DROP FUNCTION IF EXISTS spProductosListarCatalogo();
 DROP FUNCTION IF EXISTS spProductosListarCatalogo(VARCHAR);
+DROP FUNCTION IF EXISTS spProductosListarCatalogo(VARCHAR, INT);
 
 CREATE OR REPLACE FUNCTION spProductosListarCatalogo(
-    p_estado VARCHAR DEFAULT 'ACTIVOS'
+    p_estado VARCHAR DEFAULT 'ACTIVOS',
+    p_sucursal_id INT DEFAULT NULL
 )
 RETURNS TABLE (
     producto_id INT,
@@ -41,11 +43,19 @@ BEGIN
        AND c.marca_baja = FALSE
     LEFT JOIN inventario i 
         ON p.producto_id = i.producto_id 
-       AND i.sucursal_id = 1 
+       AND (p_sucursal_id IS NULL OR i.sucursal_id = p_sucursal_id)
     WHERE (
         v_estado = 'TODOS'
         OR (v_estado = 'ACTIVOS' AND p.marca_baja = FALSE)
         OR (v_estado IN ('INACTIVOS', 'BAJA', 'DADOS_DE_BAJA') AND p.marca_baja = TRUE)
+    )
+    AND (
+        p_sucursal_id IS NULL
+        OR EXISTS (
+            SELECT 1 FROM inventario inv 
+            WHERE inv.producto_id = p.producto_id 
+              AND inv.sucursal_id = p_sucursal_id
+        )
     )
     GROUP BY 
         p.producto_id, 

@@ -82,6 +82,33 @@ public class InventarioLoteDTO {
     @JsonProperty("marcaBaja")
     private Boolean marcaBaja;
 
+    @Schema(description = "ID de la sucursal física", example = "1")
+    @JsonProperty("sucursalId")
+    private Integer sucursalId;
+
+    @Schema(description = "Código interno de la sucursal", example = "SUC-001")
+    @JsonProperty("codigoSucursal")
+    private String codigoSucursal;
+
+    @Schema(description = "Ciudad de la sucursal", example = "Warnes Central")
+    @JsonProperty("ciudadSucursal")
+    private String ciudadSucursal;
+
+    @JsonProperty("sucursal_id")
+    public Integer getSucursal_id() {
+        return sucursalId;
+    }
+
+    @JsonProperty("codigo_sucursal")
+    public String getCodigo_sucursal() {
+        return codigoSucursal;
+    }
+
+    @JsonProperty("ciudad_sucursal")
+    public String getCiudad_sucursal() {
+        return ciudadSucursal;
+    }
+
     @JsonProperty("marca_baja")
     public Boolean getMarca_baja() {
         return marcaBaja;

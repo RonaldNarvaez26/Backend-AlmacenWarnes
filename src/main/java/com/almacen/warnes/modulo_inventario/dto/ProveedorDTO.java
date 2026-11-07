@@ -15,6 +15,10 @@ public class ProveedorDTO {
     @JsonProperty("proveedorId")
     private Integer proveedorId;
 
+    @Schema(description = "Identificador de la sucursal asignada", example = "1")
+    @JsonProperty("sucursalId")
+    private Integer sucursalId;
+
     @Schema(description = "Razón social de la empresa", example = "PIL Andina S.A.")
     @JsonProperty("nombreEmpresa")
     private String nombreEmpresa;
@@ -37,6 +41,9 @@ public class ProveedorDTO {
 
     @JsonProperty("proveedor_id")
     public Integer getProveedor_id() { return proveedorId; }
+
+    @JsonProperty("sucursal_id")
+    public Integer getSucursal_id() { return sucursalId; }
 
     @JsonProperty("nombre_empresa")
     public String getNombre_empresa() { return nombreEmpresa; }

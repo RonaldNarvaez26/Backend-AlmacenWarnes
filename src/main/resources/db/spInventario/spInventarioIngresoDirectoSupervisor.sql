@@ -1,3 +1,6 @@
+DROP PROCEDURE IF EXISTS spInventarioIngresoDirectoSupervisor(INT, INT, VARCHAR, VARCHAR, VARCHAR, INT, VARCHAR, INT, DECIMAL, DECIMAL, DECIMAL, DATE, INT);
+DROP PROCEDURE IF EXISTS spInventarioIngresoDirectoSupervisor(INT, INT, VARCHAR, VARCHAR, VARCHAR, INT, VARCHAR, INT, DECIMAL, DECIMAL, DECIMAL, DATE, INT, INT);
+
 CREATE OR REPLACE PROCEDURE spInventarioIngresoDirectoSupervisor(
     p_producto_id INT, 
     p_categoria_id INT, 
@@ -11,13 +14,14 @@ CREATE OR REPLACE PROCEDURE spInventarioIngresoDirectoSupervisor(
     p_precio_compra DECIMAL(8,2), 
     p_precio_venta DECIMAL(8,2), 
     p_fecha_vencimiento DATE,
-    p_usuario_creacion INT
+    p_usuario_creacion INT,
+    p_sucursal_id INT DEFAULT 1
 )
 LANGUAGE plpgsql
 AS $$
 DECLARE
     v_nuevo_lote_id INT;
-    v_sucursal_fija INT := 1;
+    v_sucursal_id INT := COALESCE(p_sucursal_id, 1);
 BEGIN
     -- Si no viene producto_id pero viene codigo_barras no vacio, buscar coincidencia
     IF p_producto_id IS NULL AND p_codigo_barras IS NOT NULL AND TRIM(p_codigo_barras) <> '' THEN
@@ -78,6 +82,6 @@ BEGIN
     INSERT INTO inventario
         (sucursal_id, lote_id, producto_id, stock, en_descuento, fecha_creacion, usuario_creacion, marca_baja)
     VALUES
-        (v_sucursal_fija, v_nuevo_lote_id, p_producto_id, p_stock_ingresado, FALSE, CURRENT_TIMESTAMP, p_usuario_creacion, FALSE);
+        (v_sucursal_id, v_nuevo_lote_id, p_producto_id, p_stock_ingresado, FALSE, CURRENT_TIMESTAMP, p_usuario_creacion, FALSE);
 END;
 $$;

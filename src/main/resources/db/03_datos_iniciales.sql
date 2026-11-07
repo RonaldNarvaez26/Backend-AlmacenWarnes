@@ -17,6 +17,8 @@ ALTER TABLE sucursales ADD COLUMN IF NOT EXISTS usuario_modificacion INTEGER NUL
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS sucursal_id INTEGER NULL REFERENCES sucursales(sucursal_id);
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS estado INTEGER NOT NULL DEFAULT 1;
 
+ALTER TABLE proveedores ADD COLUMN IF NOT EXISTS sucursal_id INTEGER NULL REFERENCES sucursales(sucursal_id);
+
 ALTER TABLE inventario_pendientes
 ADD COLUMN IF NOT EXISTS proveedor_id INTEGER NULL REFERENCES proveedores(proveedor_id),
 ADD COLUMN IF NOT EXISTS descripcion_lote VARCHAR(150) NULL,
@@ -135,35 +137,43 @@ INSERT INTO usuarios (
     usuario_id, sucursal_id, usuario, nombres, apellidos, rol_id, estado, 
     password, marca_baja, fecha_creacion, usuario_creacion
 ) VALUES
--- 2 Propietarios (rol_id = 3)
-(1, 1, 'kenneth.admin',     'Kenneth Gabriel', 'Lopez Castillo',  3, 1, '$2a$10$8ZGJ5gZH2Nbjhk3tEbs56OYzWwjFrYYgvAukd3NgBnxUNCmZYsIIW', FALSE, CURRENT_TIMESTAMP, 1),
-(2, 1, 'ronald.admin',      'Ronald',          'Narvaez Alvarez', 3, 1, '$2a$10$8ZGJ5gZH2Nbjhk3tEbs56OYzWwjFrYYgvAukd3NgBnxUNCmZYsIIW', FALSE, CURRENT_TIMESTAMP, 1),
+-- 2 Propietarios (rol_id = 3, sucursal_id = NULL para visión global)
+(1, NULL, 'kenneth.admin',     'Kenneth Gabriel', 'Lopez Castillo',  3, 1, '$2a$10$8ZGJ5gZH2Nbjhk3tEbs56OYzWwjFrYYgvAukd3NgBnxUNCmZYsIIW', FALSE, CURRENT_TIMESTAMP, 1),
+(2, NULL, 'ronald.admin',      'Ronald',          'Narvaez Alvarez', 3, 1, '$2a$10$8ZGJ5gZH2Nbjhk3tEbs56OYzWwjFrYYgvAukd3NgBnxUNCmZYsIIW', FALSE, CURRENT_TIMESTAMP, 1),
 
--- 2 Supervisores (rol_id = 2)
+-- 2 Supervisores (rol_id = 2, aislados por sucursal)
 (3, 1, 'carlos.supervisor', 'Carlos Eduardo',  'Mendoza Quispe',  2, 1, '$2a$10$8ZGJ5gZH2Nbjhk3tEbs56OYzWwjFrYYgvAukd3NgBnxUNCmZYsIIW', FALSE, CURRENT_TIMESTAMP, 1),
 (4, 2, 'patricia.supervisor','Patricia Laura', 'Benitez Rojas',   2, 1, '$2a$10$8ZGJ5gZH2Nbjhk3tEbs56OYzWwjFrYYgvAukd3NgBnxUNCmZYsIIW', FALSE, CURRENT_TIMESTAMP, 1),
 
--- 2 Cajeros (rol_id = 1)
+-- 2 Cajeros (rol_id = 1, aislados por sucursal)
 (5, 1, 'ana.cajera',        'Ana Maria',       'Flores Condori',  1, 1, '$2a$10$8ZGJ5gZH2Nbjhk3tEbs56OYzWwjFrYYgvAukd3NgBnxUNCmZYsIIW', FALSE, CURRENT_TIMESTAMP, 1),
 (6, 2, 'luis.cajero',       'Luis Fernando',   'Mamani Vargas',   1, 1, '$2a$10$8ZGJ5gZH2Nbjhk3tEbs56OYzWwjFrYYgvAukd3NgBnxUNCmZYsIIW', FALSE, CURRENT_TIMESTAMP, 1);
 
 -- ============================================================================
--- 6. PROVEEDORES ABUNDANTES (TABLA: PROVEEDORES)
--- 8 Proveedores realistas. Proveedor #8 configurado con marca_baja = TRUE
--- para verificar de inmediato el filtro 'Dados de Baja' y la función de Restaurar.
+-- 6. PROVEEDORES POR SUCURSAL (TABLA: PROVEEDORES)
+-- Aislamiento estricto por sucursal_id. Cada sucursal maneja sus propios proveedores
+-- 12 Proveedores (5 en Sucursal 1 y 7 en Sucursal 2). 
+-- Incluye proveedores dados de baja (#10 y #12) para verificar filtro y restaurar.
 -- ============================================================================
 INSERT INTO proveedores (
-    proveedor_id, nombre_empresa, nombre_contacto, numero_contacto, 
+    proveedor_id, sucursal_id, nombre_empresa, nombre_contacto, numero_contacto, 
     anotaciones, marca_baja, fecha_creacion, usuario_creacion
 ) VALUES
-(1, 'PIL Andina S.A.',               'Roberto Gomez',    '70112233', 'Contrato CONTR-PIL-2026: Entregas martes y viernes 08:00 AM. Credito quincenal.', FALSE, CURRENT_TIMESTAMP, 1),
-(2, 'Embol S.A. (Coca-Cola)',        'Jorge Camacho',    '72001122', 'Contrato EMB-CB-2026: Preventa lunes, entrega miercoles. Canje botellas retornables.', FALSE, CURRENT_TIMESTAMP, 1),
-(3, 'Cerveceria Boliviana Nacional', 'Marcelo Quiroga',  '73004455', 'Distribuidor oficial Huari, Pacena y Maltin. Descuento 5% volumen.', FALSE, CURRENT_TIMESTAMP, 1),
-(4, 'Industrias Venado S.A.',        'Lucia Vargas',     '71556677', 'Contrato DIST-VEN-2026: Distribuidor abarrotes y salsas Kris. Pedido minimo 20 cajas.', FALSE, CURRENT_TIMESTAMP, 1),
-(5, 'Fagal S.R.L. (Mabel''s)',       'Andrea Salazar',   '78009911', 'Linea de galletas Wafer, Cremositas y Morochas. Visita quincenal.', FALSE, CURRENT_TIMESTAMP, 1),
-(6, 'Unilever Andina Bolivia',       'Carla Medina',     '76543210', 'Contrato UNI-BOL-2026: Detergentes OMO, Skip, Rexona y Sedal. Facturacion centralizada.', FALSE, CURRENT_TIMESTAMP, 1),
-(7, 'Avicola Sofia Ltda.',           'Javier Gutierrez', '77012399', 'Cadena de frio: embutidos, pollo y congelados. Entregas diarias 07:00 AM.', FALSE, CURRENT_TIMESTAMP, 1),
-(8, 'Nestle Bolivia S.A.',           'Daniel Miranda',   '79901188', 'Linea Nescafe, Milo, Leche Nido y Chocolates Sublime. Pago credito a 30 dias.', TRUE, CURRENT_TIMESTAMP, 1); -- Dado de baja logica
+-- SUCURSAL 1 (SUC-001 - Warnes Central)
+(1,  1, 'PIL Andina S.A. (Agencia Central)',               'Roberto Gomez',    '70112233', 'Contrato CONTR-PIL-2026: Entregas martes y viernes 08:00 AM. Credito quincenal.', FALSE, CURRENT_TIMESTAMP, 1),
+(2,  1, 'Embol S.A. Coca-Cola (Agencia Central)',          'Jorge Camacho',    '72001122', 'Contrato EMB-CB-2026: Preventa lunes, entrega miercoles. Canje botellas retornables.', FALSE, CURRENT_TIMESTAMP, 1),
+(3,  1, 'Cerveceria Boliviana Nacional (Agencia Central)', 'Marcelo Quiroga',  '73004455', 'Distribuidor oficial Huari, Pacena y Maltin Warnes Central. Descuento 5% volumen.', FALSE, CURRENT_TIMESTAMP, 1),
+(9,  1, 'Molinera & Granos del Oriente (Warnes Central)',   'Gonzalo Rios',     '71020304', 'Distribuidor oficial de cereales, arroz primera y azucar por quintales.', FALSE, CURRENT_TIMESTAMP, 1),
+(10, 1, 'Frigorifico Santa Fe Central S.R.L.',             'Esteban Paz',      '74010203', 'Embutidos y fiambres al vacio. Temporalmente suspendido por adecuacion sanitaria.', TRUE, CURRENT_TIMESTAMP, 1), -- Baja logica para probar recuperacion en Sucursal 1
+
+-- SUCURSAL 2 (SUC-002 - Warnes Norte)
+(4,  2, 'Industrias Venado S.A. (Agencia Norte)',          'Lucia Vargas',     '71556677', 'Contrato DIST-VEN-2026: Distribuidor abarrotes y salsas Kris. Pedido minimo 20 cajas.', FALSE, CURRENT_TIMESTAMP, 1),
+(5,  2, 'Fagal S.R.L. Mabel''s (Agencia Norte)',           'Andrea Salazar',   '78009911', 'Linea de galletas Wafer, Cremositas y Morochas. Visita quincenal Warnes Norte.', FALSE, CURRENT_TIMESTAMP, 1),
+(6,  2, 'Unilever Andina Bolivia (Distribuidora Norte)',    'Carla Medina',     '76543210', 'Contrato UNI-BOL-2026: Detergentes OMO, Skip, Rexona y Sedal. Facturacion centralizada.', FALSE, CURRENT_TIMESTAMP, 1),
+(7,  2, 'Avicola Sofia Ltda. (Agencia Norte)',             'Javier Gutierrez', '77012399', 'Cadena de frio: embutidos, pollo, quesos y congelados. Entregas diarias 07:00 AM.', FALSE, CURRENT_TIMESTAMP, 1),
+(8,  2, 'Nestle Bolivia S.A. (Agencia Norte)',             'Daniel Miranda',   '79901188', 'Linea Nescafe, Milo, Leche Nido y Chocolates Sublime. Pago credito a 30 dias.', FALSE, CURRENT_TIMESTAMP, 1),
+(11, 2, 'Cerveceria Boliviana Nacional (Agencia Norte)',   'Rodrigo Morales',  '75098765', 'Distribuidora CBN exclusiva para Warnes Norte. Pedidos semanales jueves.', FALSE, CURRENT_TIMESTAMP, 1),
+(12, 2, 'Distribuidora Quimicos Warnes Norte Ltda.',       'Valeria Mendez',   '76081234', 'Articulos de desinfeccion y limpieza industrial. Dado de baja por cambio de razon social.', TRUE, CURRENT_TIMESTAMP, 1); -- Baja logica para probar recuperacion en Sucursal 2
 
 -- ============================================================================
 -- 7. CATALOGO MAESTRO DE PRODUCTOS (TABLA: PRODUCTOS)
@@ -261,13 +271,16 @@ INSERT INTO lotes (
 
 -- ============================================================================
 -- 9. INVENTARIO FISICO COMERCIAL (TABLA: INVENTARIO)
--- 20 Registros correspondientes a los 20 lotes con stock asignado a Sucursal Central (1).
+-- 20 Registros distribuidos en las 2 sucursales:
+--   - Sucursal 1 (Warnes Central, SUC-001): Lotes 1 al 12 (Productos 1 al 8)
+--   - Sucursal 2 (Warnes Norte, SUC-002):   Lotes 13 al 20 (Productos 9 al 13, 15)
 -- Incluye ítems en descuento por proximidad a vencer e ítems dados de baja lógica.
 -- ============================================================================
 INSERT INTO inventario (
     inventario_id, sucursal_id, lote_id, producto_id, stock, 
     en_descuento, precio_descuento, marca_baja, fecha_creacion, usuario_creacion
 ) VALUES
+-- SUCURSAL 1 (Warnes Central - SUC-001)
 -- Prod 1: Leche PIL
 (1,  1, 1,  1,  18, TRUE,  5.00, FALSE, CURRENT_TIMESTAMP, 3), -- En liquidacion por vencer en 3 dias (precio normal 6.50 -> 5.00)
 (2,  1, 2,  1,  60, FALSE, NULL, FALSE, CURRENT_TIMESTAMP, 3),
@@ -296,35 +309,47 @@ INSERT INTO inventario (
 -- Prod 8: Malta Maltin
 (12, 1, 12, 8,  42, FALSE, NULL, FALSE, CURRENT_TIMESTAMP, 3),
 
+-- SUCURSAL 2 (Warnes Norte - SUC-002)
 -- Prod 9: Cafe Nescafe
-(13, 1, 13, 9,  14, FALSE, NULL, FALSE, CURRENT_TIMESTAMP, 3),
+(13, 2, 13, 9,  14, FALSE, NULL, FALSE, CURRENT_TIMESTAMP, 4),
 
 -- Prod 10: Mayonesa Kris
-(14, 1, 14, 10, 32, FALSE, NULL, FALSE, CURRENT_TIMESTAMP, 3),
+(14, 2, 14, 10, 32, FALSE, NULL, FALSE, CURRENT_TIMESTAMP, 4),
 
 -- Prod 11: Ketchup Kris
-(15, 1, 15, 11, 26, FALSE, NULL, FALSE, CURRENT_TIMESTAMP, 3),
+(15, 2, 15, 11, 26, FALSE, NULL, FALSE, CURRENT_TIMESTAMP, 4),
 
 -- Prod 12 y 13: Galletas Mabel's
-(16, 1, 16, 12, 55, FALSE, NULL, FALSE, CURRENT_TIMESTAMP, 3),
-(17, 1, 17, 13, 45, FALSE, NULL, FALSE, CURRENT_TIMESTAMP, 3),
+(16, 2, 16, 12, 55, FALSE, NULL, FALSE, CURRENT_TIMESTAMP, 4),
+(17, 2, 17, 13, 45, FALSE, NULL, FALSE, CURRENT_TIMESTAMP, 4),
 
 -- Prod 14: Chocolate Sublime (Dado de baja para probar reactivación)
-(18, 1, 18, 14, 20, FALSE, NULL, TRUE,  CURRENT_TIMESTAMP, 3),
+(18, 2, 18, 14, 20, FALSE, NULL, TRUE,  CURRENT_TIMESTAMP, 4),
 
 -- Prod 15: Detergente OMO
-(19, 1, 19, 15, 22, FALSE, NULL, FALSE, CURRENT_TIMESTAMP, 3),
+(19, 2, 19, 15, 22, FALSE, NULL, FALSE, CURRENT_TIMESTAMP, 4),
 
 -- Prod 16: Lavandina (Dado de baja para probar reactivación)
-(20, 1, 20, 16, 10, FALSE, NULL, TRUE,  CURRENT_TIMESTAMP, 3);
+(20, 2, 20, 16, 10, FALSE, NULL, TRUE,  CURRENT_TIMESTAMP, 4);
 
 -- ============================================================================
 -- 10. SALA DE ESPERA (TABLA: INVENTARIO_PENDIENTES)
--- 4 Casos listos para demostración en vivo de auditoría:
---   Caso 1 (Estado = 1 Pendiente): Reabastecimiento de producto existente (Leche PIL).
---   Caso 2 (Estado = 1 Pendiente): Producto TOTALMENTE NUEVO (Cereal Chocapic) con producto_id = NULL.
---   Caso 3 (Estado = 4 Observado): Mercadería con observación del supervisor lista para rectificar.
---   Caso 4 (Estado = 3 Rechazado): Mercadería rechazada con justificación de calidad.
+-- 12 Registros completos para pruebas en vivo de auditoría y aprobación:
+--   - SUC-001 (Creados por Cajera Ana Maria #5):
+--       IP-1: Reabastecimiento Leche Entera PIL (Prod #1)
+--       IP-2: Reabastecimiento Coca-Cola 2L (Prod #5)
+--       IP-3: NUEVO Producto: Yogurt Griego PIL 500g (prod_id NULL)
+--       IP-4: NUEVO Producto: Jugo del Valle Naranja 1L (prod_id NULL)
+--       IP-5: NUEVO Producto: Arroz Grano de Oro 5kg (prod_id NULL)
+--       IP-6: OBSERVADO: Malta Maltin 330ml (Revisado por Supervisor Carlos #3)
+--   - SUC-002 (Creados por Cajero Luis Mamani #6):
+--       IP-7: Reabastecimiento Galletas Wafer Mabel's (Prod #12)
+--       IP-8: NUEVO Producto: Queso Menonita San Javier 1kg (prod_id NULL)
+--       IP-9: NUEVO Producto: Cerveza Huari Tradicional 620ml (prod_id NULL)
+--       IP-10: NUEVO Producto: Lavavajillas Ola Limon 750ml (prod_id NULL)
+--       IP-11: OBSERVADO: Mayonesa Kris Doypack 500g (Revisado por Supervisora Patricia #4)
+--   - Control de Calidad:
+--       IP-12: RECHAZADO: Bebida Energizante Volt 300ml (Rechazado por Supervisor Carlos #3)
 -- ============================================================================
 INSERT INTO inventario_pendientes (
     inventario_pendiente_id, sucursal_id, producto_id, nombre_producto, codigo_barras, 
@@ -332,25 +357,57 @@ INSERT INTO inventario_pendientes (
     estado, marca_baja, fecha_creacion, usuario_creacion, fecha_revision, usuario_revision, 
     proveedor_id, descripcion_lote, fecha_vencimiento, observacion_revision, fecha_subsanacion
 ) VALUES
--- Caso 1: Reabastecimiento pendiente de aprobación
+-- SUC-001: Warnes Central (Cajera Ana Maria, ID=5)
 (1, 1, 1, 'Leche Entera PIL Bolsa 946ml', '7771234560011', 'LEC001', 1, 5.20, 6.50, 40, 
  1, FALSE, CURRENT_TIMESTAMP - INTERVAL '3 hours', 5, NULL, NULL, 
  1, 'Reabastecimiento PIL Quincena Central', CURRENT_DATE + INTERVAL '30 days', NULL, NULL),
 
--- Caso 2: Producto nuevo en catálogo esperando validación de código interno y alta maestro
-(2, 1, NULL, 'Cereal Chocapic Nestle 400g', '7779998880011', 'CER001', 1, 18.00, 24.00, 30, 
+(2, 1, 5, 'Coca-Cola Sabor Original 2L', '7772223330018', 'GAS001', 2, 8.50, 11.00, 30, 
+ 1, FALSE, CURRENT_TIMESTAMP - INTERVAL '2 hours', 5, NULL, NULL, 
+ 2, 'Lote Coca-Cola 2L Reposicion Central', CURRENT_DATE + INTERVAL '120 days', NULL, NULL),
+
+(3, 1, NULL, 'Yogurt Griego PIL Natural 500g', '7771234560099', 'YOG002', 1, 12.00, 16.00, 25, 
  1, FALSE, CURRENT_TIMESTAMP - INTERVAL '1 hour', 5, NULL, NULL, 
- 8, 'Lote Entrada Inicial Cereal Chocapic', CURRENT_DATE + INTERVAL '180 days', NULL, NULL),
+ 1, 'Lote Inicial Yogurt Griego PIL', CURRENT_DATE + INTERVAL '40 days', NULL, NULL),
 
--- Caso 3: Registro OBSERVADO por el supervisor para rectificación de costos
-(3, 1, 5, 'Coca-Cola Sabor Original 2L', '7772223330018', 'GAS001', 2, 9.50, 11.00, 50, 
- 4, FALSE, CURRENT_TIMESTAMP - INTERVAL '5 hours', 6, CURRENT_TIMESTAMP - INTERVAL '2 hours', 3, 
- 2, 'Lote Coca-Cola 2L Observado por Costo', CURRENT_DATE + INTERVAL '120 days', 
- 'El precio de compra declarado (Bs 9.50) supera el acuerdo marco con EMBOL. Rectificar costo unitario a Bs 8.50 o adjuntar factura firmada.', NULL),
+(4, 1, NULL, 'Jugo del Valle Naranja 1L', '7772223330099', 'BEB001', 2, 7.00, 10.00, 36, 
+ 1, FALSE, CURRENT_TIMESTAMP - INTERVAL '45 minutes', 5, NULL, NULL, 
+ 2, 'Lote Del Valle Naranja Tetrabrik', CURRENT_DATE + INTERVAL '180 days', NULL, NULL),
 
--- Caso 4: Registro RECHAZADO por control de calidad y registro sanitario
-(4, 1, NULL, 'Bebida Energizante Volt 300ml', '7778887770019', 'VOL001', 2, 4.00, 6.50, 100, 
- 3, FALSE, CURRENT_TIMESTAMP - INTERVAL '1 day', 6, CURRENT_TIMESTAMP - INTERVAL '18 hours', 3, 
+(5, 1, NULL, 'Arroz Grano de Oro Superior 5kg', '7774442220099', 'ABA001', 3, 28.00, 35.00, 20, 
+ 1, FALSE, CURRENT_TIMESTAMP - INTERVAL '30 minutes', 5, NULL, NULL, 
+ 9, 'Lote Arroz Grano de Oro Primera', CURRENT_DATE + INTERVAL '365 days', NULL, NULL),
+
+(6, 1, 8, 'Malta Maltin Clasica 330ml', '7773331110015', 'MAL001', 2, 4.80, 6.00, 48, 
+ 4, FALSE, CURRENT_TIMESTAMP - INTERVAL '4 hours', 5, CURRENT_TIMESTAMP - INTERVAL '2 hours', 3, 
+ 3, 'Lote Maltin 330ml Observado por Costo', CURRENT_DATE + INTERVAL '90 days', 
+ 'Costo unitario declarado (Bs 4.80) no coincide con el acuerdo oficial de distribucion (Bs 4.00). Favor subsanar o rectificar el precio.', NULL),
+
+-- SUC-002: Warnes Norte (Cajero Luis Mamani, ID=6)
+(7, 2, 12, 'Galletas Wafer Mabel''s Vainilla 120g', '7775551110016', 'GAL001', 4, 3.20, 5.00, 50, 
+ 1, FALSE, CURRENT_TIMESTAMP - INTERVAL '3 hours', 6, NULL, NULL, 
+ 5, 'Lote Wafer Reposicion Norte', CURRENT_DATE + INTERVAL '110 days', NULL, NULL),
+
+(8, 2, NULL, 'Queso Menonita San Javier 1kg', '7771239990012', 'LAC001', 1, 32.00, 42.00, 15, 
+ 1, FALSE, CURRENT_TIMESTAMP - INTERVAL '2 hours', 6, NULL, NULL, 
+ 7, 'Lote Queso Menonita Tradicional', CURRENT_DATE + INTERVAL '45 days', NULL, NULL),
+
+(9, 2, NULL, 'Cerveza Huari Tradicional 620ml', '7773339990014', 'CER001', 2, 9.50, 13.00, 48, 
+ 1, FALSE, CURRENT_TIMESTAMP - INTERVAL '1 hour', 6, NULL, NULL, 
+ 11, 'Lote Huari Tradicional Cajas', CURRENT_DATE + INTERVAL '180 days', NULL, NULL),
+
+(10, 2, NULL, 'Lavavajillas Ola Limon 750ml', '7776669990017', 'LIM001', 5, 8.50, 12.00, 30, 
+ 1, FALSE, CURRENT_TIMESTAMP - INTERVAL '30 minutes', 6, NULL, NULL, 
+ 6, 'Lote Lavavajillas Ola Botellas', CURRENT_DATE + INTERVAL '500 days', NULL, NULL),
+
+(11, 2, 10, 'Mayonesa Kris Doypack 500g', '7774442220019', 'MAY001', 3, 10.50, 13.00, 35, 
+ 4, FALSE, CURRENT_TIMESTAMP - INTERVAL '5 hours', 6, CURRENT_TIMESTAMP - INTERVAL '2 hours', 4, 
+ 4, 'Lote Mayonesa Kris Observado por Vencimiento', CURRENT_DATE + INTERVAL '150 days', 
+ 'Fecha de vencimiento reportada presenta borrones en la caja fisica. Verificar con el transportista y actualizar fecha antes de recepcionar.', NULL),
+
+-- Caso Rechazado: Control de calidad en Sucursal 1 (Cajera Ana #5, Supervisor Carlos #3)
+(12, 1, NULL, 'Bebida Energizante Volt 300ml', '7778887770019', 'VOL001', 2, 4.00, 6.50, 100, 
+ 3, FALSE, CURRENT_TIMESTAMP - INTERVAL '1 day', 5, CURRENT_TIMESTAMP - INTERVAL '18 hours', 3, 
  2, 'Lote Volt 300ml Rechazado', CURRENT_DATE + INTERVAL '60 days', 
  'Rechazado en recepcion fisica: Empaque secundario con botellas abolladas y sin registro sanitario Senasag visible.', NULL);
 
@@ -373,29 +430,60 @@ INSERT INTO detalles_ventas (detalle_venta_id, producto_id, venta_id, inventario
 
 -- ============================================================================
 -- 12. SINCRONIZACION AUTOMATICA DE TODAS LAS SECUENCIAS
+-- Sincroniza cada secuencia serial al valor maximo actual usando setval()
+-- Si la tabla tiene registros: setval(seq, MAX(id), true) -> el siguiente nextval da MAX(id) + 1
+-- Si la tabla esta vacia:     setval(seq, 1, false)       -> el siguiente nextval da 1
 -- ============================================================================
 DO $$
 DECLARE
-    r RECORD;
+    t RECORD;
     v_max BIGINT;
-    v_seq_name TEXT;
+    v_seq TEXT;
 BEGIN
-    FOR r IN (
-        SELECT c.relname AS tabla, a.attname AS columna
-        FROM pg_class c
-        JOIN pg_namespace n ON n.oid = c.relnamespace
-        JOIN pg_attribute a ON a.attrelid = c.oid
-        WHERE n.nspname = 'public' 
-          AND c.relkind = 'r' 
-          AND a.attnum > 0 
-          AND NOT a.attisdropped
-          AND a.attname = c.relname || '_id'
-    ) LOOP
-        v_seq_name := pg_get_serial_sequence(r.tabla, r.columna);
-        IF v_seq_name IS NOT NULL THEN
-            EXECUTE format('SELECT COALESCE(MAX(%I), 0) + 1 FROM %I', r.columna, r.tabla) INTO v_max;
-            EXECUTE format('ALTER SEQUENCE %s RESTART WITH %s', v_seq_name, v_max);
-            RAISE NOTICE 'Secuencia % reiniciada en %', v_seq_name, v_max;
+    FOR t IN
+        SELECT * FROM (VALUES
+            ('conceptos',             'concepto_id'),
+            ('sucursales',            'sucursal_id'),
+            ('usuarios',              'usuario_id'),
+            ('proveedores',           'proveedor_id'),
+            ('productos',             'producto_id'),
+            ('lotes',                 'lote_id'),
+            ('inventario',            'inventario_id'),
+            ('inventario_pendientes', 'inventario_pendiente_id'),
+            ('clientes',              'cliente_id'),
+            ('ventas',                'venta_id'),
+            ('detalles_ventas',       'detalle_venta_id'),
+            ('reportes',              'reporte_id'),
+            ('movimientos',           'movimiento_id'),
+            ('entradas',              'entrada_id'),
+            ('salidas',               'salida_id'),
+            ('sesiones',              'sesion_id')
+        ) AS tbl(table_name, column_name)
+    LOOP
+        v_seq := pg_get_serial_sequence(t.table_name, t.column_name);
+        IF v_seq IS NOT NULL THEN
+            EXECUTE format('SELECT MAX(%I) FROM %I', t.column_name, t.table_name) INTO v_max;
+            IF v_max IS NOT NULL THEN
+                PERFORM setval(v_seq, v_max, true);
+                RAISE NOTICE 'Secuencia % sincronizada en % (is_called = true)', v_seq, v_max;
+            ELSE
+                PERFORM setval(v_seq, 1, false);
+                RAISE NOTICE 'Secuencia % sincronizada en 1 (is_called = false)', v_seq;
+            END IF;
+        ELSE
+            v_seq := t.table_name || '_' || t.column_name || '_seq';
+            IF EXISTS (SELECT 1 FROM pg_class WHERE relkind = 'S' AND relname = v_seq) THEN
+                EXECUTE format('SELECT MAX(%I) FROM %I', t.column_name, t.table_name) INTO v_max;
+                IF v_max IS NOT NULL THEN
+                    PERFORM setval(v_seq, v_max, true);
+                    RAISE NOTICE 'Secuencia (fallback) % sincronizada en % (is_called = true)', v_seq, v_max;
+                ELSE
+                    PERFORM setval(v_seq, 1, false);
+                    RAISE NOTICE 'Secuencia (fallback) % sincronizada en 1 (is_called = false)', v_seq;
+                END IF;
+            ELSE
+                RAISE NOTICE 'No se encontro secuencia para %.%', t.table_name, t.column_name;
+            END IF;
         END IF;
     END LOOP;
 END $$;
@@ -518,4 +606,3 @@ BEGIN
     WHERE usuario = p_usuario AND marca_baja = FALSE;
 END;
 $$;
-

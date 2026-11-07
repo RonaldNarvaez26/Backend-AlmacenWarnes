@@ -5,6 +5,9 @@ import java.time.LocalDateTime;
 
 public interface ProveedorListadoProjection {
     Integer getProveedor_id();
+    Integer getSucursal_id();
+    String getCodigo_sucursal();
+    String getCiudad_sucursal();
     String getNombre_empresa();
     String getNombre_contacto();
     String getNumero_contacto();

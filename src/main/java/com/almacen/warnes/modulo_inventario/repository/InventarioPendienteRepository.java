@@ -20,12 +20,14 @@ public interface InventarioPendienteRepository extends JpaRepository<InventarioP
 
     /**
      * Resuelve los datos de la Sala de Espera leyendo directamente las columnas físicas
-     * de inventario_pendientes (proveedor_id, descripcion_lote, fecha_vencimiento, observacion_revision, fecha_subsanacion)
-     * y cruzando con las tablas reales usuarios y proveedores. CERO LEFT JOIN LATERAL a lotes.
+     * de inventario_pendientes y cruzando con sucursales, usuarios y proveedores.
+     * Soporta aislamiento por sucursal (p_sucursal_id).
      */
     @Query(value = """
         SELECT ip.inventario_pendiente_id AS inventarioPendienteId,
                ip.sucursal_id AS sucursalId,
+               s.codigo_interno AS codigoSucursal,
+               s.ciudad AS ciudadSucursal,
                ip.producto_id AS productoId,
                ip.nombre_producto AS nombreProducto,
                ip.codigo_barras AS codigoBarras,
@@ -45,21 +47,35 @@ public interface InventarioPendienteRepository extends JpaRepository<InventarioP
                ip.fecha_vencimiento AS fechaVencimiento,
                ip.observacion_revision AS observacionRevision,
                ip.fecha_subsanacion AS fechaSubsanacion,
-               TRIM(CONCAT(COALESCE(uc.nombres, ''), ' ', COALESCE(uc.apellidos, ''))) AS nombreUsuarioCreacion,
-               TRIM(CONCAT(COALESCE(ur.nombres, ''), ' ', COALESCE(ur.apellidos, ''))) AS nombreUsuarioRevision,
-               pr.nombre_empresa AS nombreProveedor
+               TRIM(CONCAT(COALESCE(uc.nombres, ''), ' ', COALESCE(uc.apellidos, ''))) AS "nombreUsuarioCreacion",
+               TRIM(CONCAT(COALESCE(uc.nombres, ''), ' ', COALESCE(uc.apellidos, ''))) AS "nombre_usuario_creacion",
+               TRIM(CONCAT(COALESCE(ur.nombres, ''), ' ', COALESCE(ur.apellidos, ''))) AS "nombreUsuarioRevision",
+               TRIM(CONCAT(COALESCE(ur.nombres, ''), ' ', COALESCE(ur.apellidos, ''))) AS "nombre_usuario_revision",
+               c_rol.descripcion AS "rolUsuarioCreacion",
+               c_rol.descripcion AS "rol_usuario_creacion",
+               pr.nombre_empresa AS "nombreProveedor",
+               pr.nombre_empresa AS "nombre_proveedor"
         FROM inventario_pendientes ip
+        LEFT JOIN sucursales s ON s.sucursal_id = ip.sucursal_id
         LEFT JOIN usuarios uc ON uc.usuario_id = ip.usuario_creacion
+        LEFT JOIN conceptos c_rol ON c_rol.grupo_id = 1 AND c_rol.codigo = uc.rol_id AND c_rol.marca_baja = false
         LEFT JOIN usuarios ur ON ur.usuario_id = ip.usuario_revision
         LEFT JOIN proveedores pr ON pr.proveedor_id = ip.proveedor_id
-        WHERE (:estado IS NULL OR ip.estado = :estado) AND ip.marca_baja = false
+        WHERE (:sucursalId IS NULL OR ip.sucursal_id = :sucursalId)
+          AND (:estado IS NULL OR ip.estado = :estado)
+          AND ip.marca_baja = false
         ORDER BY ip.inventario_pendiente_id DESC
     """, nativeQuery = true)
-    List<InventarioPendienteDetalleProjection> findPendientesConDetalleLote(@Param("estado") Integer estado);
+    List<InventarioPendienteDetalleProjection> findPendientesConDetalleLote(
+            @Param("estado") Integer estado,
+            @Param("sucursalId") Integer sucursalId
+    );
 
     @Query(value = """
         SELECT ip.inventario_pendiente_id AS inventarioPendienteId,
                ip.sucursal_id AS sucursalId,
+               s.codigo_interno AS codigoSucursal,
+               s.ciudad AS ciudadSucursal,
                ip.producto_id AS productoId,
                ip.nombre_producto AS nombreProducto,
                ip.codigo_barras AS codigoBarras,
@@ -79,15 +95,27 @@ public interface InventarioPendienteRepository extends JpaRepository<InventarioP
                ip.fecha_vencimiento AS fechaVencimiento,
                ip.observacion_revision AS observacionRevision,
                ip.fecha_subsanacion AS fechaSubsanacion,
-               TRIM(CONCAT(COALESCE(uc.nombres, ''), ' ', COALESCE(uc.apellidos, ''))) AS nombreUsuarioCreacion,
-               TRIM(CONCAT(COALESCE(ur.nombres, ''), ' ', COALESCE(ur.apellidos, ''))) AS nombreUsuarioRevision,
-               pr.nombre_empresa AS nombreProveedor
+               TRIM(CONCAT(COALESCE(uc.nombres, ''), ' ', COALESCE(uc.apellidos, ''))) AS "nombreUsuarioCreacion",
+               TRIM(CONCAT(COALESCE(uc.nombres, ''), ' ', COALESCE(uc.apellidos, ''))) AS "nombre_usuario_creacion",
+               TRIM(CONCAT(COALESCE(ur.nombres, ''), ' ', COALESCE(ur.apellidos, ''))) AS "nombreUsuarioRevision",
+               TRIM(CONCAT(COALESCE(ur.nombres, ''), ' ', COALESCE(ur.apellidos, ''))) AS "nombre_usuario_revision",
+               c_rol.descripcion AS "rolUsuarioCreacion",
+               c_rol.descripcion AS "rol_usuario_creacion",
+               pr.nombre_empresa AS "nombreProveedor",
+               pr.nombre_empresa AS "nombre_proveedor"
         FROM inventario_pendientes ip
+        LEFT JOIN sucursales s ON s.sucursal_id = ip.sucursal_id
         LEFT JOIN usuarios uc ON uc.usuario_id = ip.usuario_creacion
+        LEFT JOIN conceptos c_rol ON c_rol.grupo_id = 1 AND c_rol.codigo = uc.rol_id AND c_rol.marca_baja = false
         LEFT JOIN usuarios ur ON ur.usuario_id = ip.usuario_revision
         LEFT JOIN proveedores pr ON pr.proveedor_id = ip.proveedor_id
-        WHERE ip.marca_baja = false
+        WHERE (:sucursalId IS NULL OR ip.sucursal_id = :sucursalId)
+          AND ip.marca_baja = false
         ORDER BY ip.inventario_pendiente_id DESC
     """, nativeQuery = true)
-    List<InventarioPendienteDetalleProjection> findAllConDetalleLote();
+    List<InventarioPendienteDetalleProjection> findAllConDetalleLote(@Param("sucursalId") Integer sucursalId);
+
+    default List<InventarioPendienteDetalleProjection> findAllConDetalleLote() {
+        return findAllConDetalleLote(null);
+    }
 }

@@ -39,4 +39,8 @@ public class CrearProveedorRequestDTO {
     @Schema(description = "Identificador del usuario que registra el distribuidor (por defecto 1)", example = "1")
     @JsonProperty("usuarioCreacion")
     private Integer usuarioCreacion;
+
+    @Schema(description = "Identificador de la sucursal a la que se asigna el distribuidor", example = "1")
+    @JsonProperty("sucursalId")
+    private Integer sucursalId;
 }

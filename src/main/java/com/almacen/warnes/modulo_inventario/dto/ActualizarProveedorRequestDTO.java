@@ -39,4 +39,8 @@ public class ActualizarProveedorRequestDTO {
     @Schema(description = "Identificador del usuario que realiza la modificación", example = "1")
     @JsonProperty("usuarioModificacion")
     private Integer usuarioModificacion;
+
+    @Schema(description = "Identificador de la sucursal asignada (opcional en edición)", example = "1")
+    @JsonProperty("sucursalId")
+    private Integer sucursalId;
 }

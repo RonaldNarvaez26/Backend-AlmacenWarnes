@@ -7,6 +7,8 @@ import java.time.LocalDateTime;
 public interface InventarioPendienteDetalleProjection {
     Integer getInventarioPendienteId();
     Integer getSucursalId();
+    String getCodigoSucursal();
+    String getCiudadSucursal();
     Integer getProductoId();
     String getNombreProducto();
     String getCodigoBarras();
@@ -29,7 +31,12 @@ public interface InventarioPendienteDetalleProjection {
     String getObservacionRevision();
     LocalDateTime getFechaSubsanacion();
     String getNombreUsuarioCreacion();
+    String getNombre_usuario_creacion();
     String getNombreUsuarioRevision();
+    String getNombre_usuario_revision();
+    String getRolUsuarioCreacion();
+    String getRol_usuario_creacion();
     String getNombreProveedor();
+    String getNombre_proveedor();
 }
 

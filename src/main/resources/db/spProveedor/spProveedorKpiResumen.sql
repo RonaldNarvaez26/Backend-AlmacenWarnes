@@ -1,4 +1,7 @@
-CREATE OR REPLACE FUNCTION spProveedorKpiResumen()
+DROP FUNCTION IF EXISTS spProveedorKpiResumen();
+DROP FUNCTION IF EXISTS spProveedorKpiResumen(INT);
+
+CREATE OR REPLACE FUNCTION spProveedorKpiResumen(p_sucursal_id INT DEFAULT NULL)
 RETURNS TABLE (
     total_proveedores_activos BIGINT,
     proveedores_alertas_vencimiento BIGINT,
@@ -11,8 +14,10 @@ AS $$
 BEGIN
     RETURN QUERY
     SELECT
-        -- 1. Total proveedores activos en sistema
-        (SELECT COUNT(*) FROM proveedores WHERE marca_baja = FALSE)::BIGINT AS total_proveedores_activos,
+        -- 1. Total proveedores activos en sistema (filtrado por sucursal si corresponde)
+        (SELECT COUNT(*) FROM proveedores 
+         WHERE marca_baja = FALSE 
+           AND (p_sucursal_id IS NULL OR sucursal_id = p_sucursal_id))::BIGINT AS total_proveedores_activos,
 
         -- 2. Proveedores con lotes proximos a vencer (caducidad <= 7 dias y stock > 0)
         (SELECT COUNT(DISTINCT l.proveedor_id)
@@ -22,6 +27,8 @@ BEGIN
          WHERE l.marca_baja = FALSE
            AND i.marca_baja = FALSE
            AND p.marca_baja = FALSE
+           AND (p_sucursal_id IS NULL OR p.sucursal_id = p_sucursal_id)
+           AND (p_sucursal_id IS NULL OR i.sucursal_id = p_sucursal_id)
            AND i.stock > 0
            AND l.fecha_vencimiento IS NOT NULL
            AND (l.fecha_vencimiento - CURRENT_DATE) <= 7)::BIGINT AS proveedores_alertas_vencimiento,
@@ -33,7 +40,9 @@ BEGIN
          JOIN proveedores p ON p.proveedor_id = l.proveedor_id
          WHERE i.marca_baja = FALSE
            AND l.marca_baja = FALSE
-           AND p.marca_baja = FALSE)::BIGINT AS total_productos_abastecidos,
+           AND p.marca_baja = FALSE
+           AND (p_sucursal_id IS NULL OR p.sucursal_id = p_sucursal_id)
+           AND (p_sucursal_id IS NULL OR i.sucursal_id = p_sucursal_id))::BIGINT AS total_productos_abastecidos,
 
         -- 4. Total de lotes activos con stock > 0 de proveedores activos
         (SELECT COUNT(DISTINCT l.lote_id)
@@ -43,6 +52,8 @@ BEGIN
          WHERE l.marca_baja = FALSE
            AND i.marca_baja = FALSE
            AND p.marca_baja = FALSE
+           AND (p_sucursal_id IS NULL OR p.sucursal_id = p_sucursal_id)
+           AND (p_sucursal_id IS NULL OR i.sucursal_id = p_sucursal_id)
            AND i.stock > 0)::BIGINT AS total_lotes_activos,
 
         -- 5. Valor total de mercaderia activa abastecida (stock * costo_unitario)
@@ -53,7 +64,8 @@ BEGIN
          WHERE i.marca_baja = FALSE
            AND l.marca_baja = FALSE
            AND p.marca_baja = FALSE
+           AND (p_sucursal_id IS NULL OR p.sucursal_id = p_sucursal_id)
+           AND (p_sucursal_id IS NULL OR i.sucursal_id = p_sucursal_id)
            AND i.stock > 0)::NUMERIC(12,2) AS valor_total_inventario;
 END;
 $$;
-
