@@ -22,6 +22,7 @@ public class OpenApiConfig {
                         .description("API RESTful corporativa del sistema Almacén Warnes. " +
                                 "Proporciona servicios integrales para:\n" +
                                 "- **Módulo de Seguridad**: Autenticación, control de sesiones, gestión de usuarios, roles y sucursales.\n" +
+                                "- **Módulo de Conceptos Paramétricos**: Gestión transversal de catálogos, roles, categorías y métodos de pago.\n" +
                                 "- **Módulo de Inventario**: Administración de stock físico, lotes con caducidad, acuerdos de proveedores, " +
                                 "movimientos de almacén, auditorías y sala de espera.\n\n" +
                                 "Desarrollada con Spring Boot, Spring Security y PostgreSQL.")

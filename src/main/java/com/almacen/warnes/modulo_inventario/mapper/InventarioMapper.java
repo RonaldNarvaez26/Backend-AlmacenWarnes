@@ -1,10 +1,10 @@
 package com.almacen.warnes.modulo_inventario.mapper;
 
+import com.almacen.warnes.modulo_conceptos.dto.ConceptoDTO;
 import com.almacen.warnes.modulo_inventario.dto.*;
 import com.almacen.warnes.modulo_inventario.dto.projection.InventarioKpiProjection;
 import com.almacen.warnes.modulo_inventario.dto.projection.InventarioLoteProjection;
 import com.almacen.warnes.modulo_inventario.dto.projection.ProductoCatalogoProjection;
-import com.almacen.warnes.modulo_inventario.entity.Concepto;
 import com.almacen.warnes.modulo_inventario.entity.InventarioPendiente;
 import com.almacen.warnes.modulo_inventario.entity.Proveedor;
 import org.springframework.stereotype.Component;
@@ -145,16 +145,16 @@ public class InventarioMapper {
                 .build();
     }
 
-    public CategoriaDTO toCategoriaDTO(Concepto entity) {
-        if (entity == null) {
+    public CategoriaDTO toCategoriaDTO(ConceptoDTO dto) {
+        if (dto == null) {
             return null;
         }
         return CategoriaDTO.builder()
-                .categoriaId(entity.getCodigo())
-                .codigo(entity.getCodigo())
-                .nombreCategoria(entity.getDescripcion())
-                .descripcion(entity.getDescripcion())
-                .marcaBaja(entity.getMarcaBaja() != null ? entity.getMarcaBaja() : false)
+                .categoriaId(dto.getConceptoId())
+                .codigo(dto.getCodigo())
+                .nombreCategoria(dto.getDescripcion())
+                .descripcion(dto.getDescripcion())
+                .marcaBaja(false)
                 .build();
     }
 }

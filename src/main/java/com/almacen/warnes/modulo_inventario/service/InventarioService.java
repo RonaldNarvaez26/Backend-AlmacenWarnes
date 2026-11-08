@@ -5,7 +5,10 @@ import com.almacen.warnes.modulo_inventario.dto.projection.InventarioKpiProjecti
 import com.almacen.warnes.modulo_inventario.dto.projection.InventarioLoteProjection;
 import com.almacen.warnes.modulo_inventario.dto.projection.InventarioPendienteDetalleProjection;
 import com.almacen.warnes.modulo_inventario.dto.projection.ProductoCatalogoProjection;
-import com.almacen.warnes.modulo_inventario.entity.Concepto;
+import com.almacen.warnes.modulo_conceptos.dto.ConceptoDTO;
+import com.almacen.warnes.modulo_conceptos.dto.CrearConceptoDTO;
+import com.almacen.warnes.modulo_conceptos.dto.ModificarConceptoDTO;
+import com.almacen.warnes.modulo_conceptos.service.ConceptoService;
 import com.almacen.warnes.modulo_inventario.entity.Inventario;
 import com.almacen.warnes.modulo_inventario.entity.InventarioPendiente;
 import com.almacen.warnes.modulo_inventario.entity.Lote;
@@ -42,7 +45,7 @@ public class InventarioService {
     private final InventarioProcedureRepository inventarioProcedureRepository;
     private final LoteRepository loteRepository;
     private final ProveedorRepository proveedorRepository;
-    private final ConceptoRepository conceptoRepository;
+    private final ConceptoService conceptoService;
     private final InventarioMapper inventarioMapper;
     private final ProductoMapper productoMapper;
     private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
@@ -512,8 +515,7 @@ public class InventarioService {
     }
 
     public List<CategoriaDTO> listarCategoriasActivas() {
-        return conceptoRepository.findByGrupoIdAndMarcaBajaFalseOrderByCodigoAsc(2).stream()
-                .filter(c -> c.getCodigo() != null && c.getCodigo() > 0)
+        return conceptoService.listarPorGrupo(2).stream()
                 .map(inventarioMapper::toCategoriaDTO)
                 .collect(Collectors.toList());
     }
@@ -523,38 +525,17 @@ public class InventarioService {
         if (request == null || request.getNombre() == null || request.getNombre().trim().isEmpty()) {
             throw new IllegalArgumentException("El nombre de la categoría es obligatorio");
         }
-        String nombre = request.getNombre().trim();
-        if (nombre.length() > 80) {
-            throw new IllegalArgumentException("El nombre de la categoría no puede superar los 80 caracteres");
-        }
-
-        boolean existe = conceptoRepository.existsByGrupoIdAndDescripcionIgnoreCaseAndMarcaBajaFalse(2, nombre);
-        if (existe) {
-            throw new IllegalArgumentException("Ya existe una categoría activa con el nombre '" + nombre + "'");
-        }
-
-        Integer siguienteCodigo = conceptoRepository.obtenerSiguienteCodigo(2);
-        Integer siguienteConceptoId = conceptoRepository.obtenerSiguienteConceptoIdSequence();
-
-        Concepto nuevoConcepto = Concepto.builder()
-                .conceptoId(siguienteConceptoId)
+        CrearConceptoDTO dto = CrearConceptoDTO.builder()
                 .grupoId(2)
-                .codigo(siguienteCodigo)
-                .descripcion(nombre)
-                .marcaBaja(false)
-                .fechaCreacion(LocalDateTime.now())
+                .descripcion(request.getNombre().trim())
                 .usuarioCreacion(request.getUsuarioCreacion() != null ? request.getUsuarioCreacion() : 1)
                 .build();
-
-        conceptoRepository.saveAndFlush(nuevoConcepto);
-
+        conceptoService.insertarConcepto(dto, request.getUsuarioCreacion(), null);
         return listarCategoriasActivas();
     }
 
     public List<CategoriaDTO> listarTodasCategorias() {
-        return conceptoRepository.findByGrupoIdAndCodigoGreaterThanOrderByCodigoAsc(2, 0).stream()
-                .map(inventarioMapper::toCategoriaDTO)
-                .collect(Collectors.toList());
+        return listarCategoriasActivas();
     }
 
     @Transactional
@@ -565,13 +546,23 @@ public class InventarioService {
         if (nuevoNombre == null || nuevoNombre.trim().isEmpty()) {
             throw new IllegalArgumentException("El nombre de la categoría no puede quedar vacío");
         }
-        Concepto concepto = conceptoRepository.findByGrupoIdAndCodigo(2, codigo)
+        ConceptoDTO concepto = conceptoService.listarPorGrupo(2).stream()
+                .filter(c -> codigo.equals(c.getCodigo()))
+                .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("No se encontró la categoría con código: " + codigo));
 
-        concepto.setDescripcion(nuevoNombre.trim());
-        conceptoRepository.save(concepto);
+        ModificarConceptoDTO dto = ModificarConceptoDTO.builder()
+                .descripcion(nuevoNombre.trim())
+                .build();
+        conceptoService.modificarConcepto(concepto.getConceptoId(), dto, null, null);
 
-        return inventarioMapper.toCategoriaDTO(concepto);
+        return CategoriaDTO.builder()
+                .categoriaId(concepto.getConceptoId())
+                .codigo(codigo)
+                .nombreCategoria(nuevoNombre.trim())
+                .descripcion(nuevoNombre.trim())
+                .marcaBaja(false)
+                .build();
     }
 
     @Transactional
@@ -579,13 +570,24 @@ public class InventarioService {
         if (codigo == null || codigo <= 0) {
             throw new IllegalArgumentException("Código de categoría no válido");
         }
-        Concepto concepto = conceptoRepository.findByGrupoIdAndCodigo(2, codigo)
+        ConceptoDTO concepto = conceptoService.listarPorGrupo(2).stream()
+                .filter(c -> codigo.equals(c.getCodigo()))
+                .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("No se encontró la categoría con código: " + codigo));
 
-        concepto.setMarcaBaja(Boolean.TRUE.equals(marcaBaja));
-        conceptoRepository.save(concepto);
+        if (Boolean.TRUE.equals(marcaBaja)) {
+            conceptoService.eliminarConcepto(concepto.getConceptoId(), null, null);
+        } else {
+            jdbcTemplate.update("UPDATE Conceptos SET marca_baja = false WHERE concepto_id = ?", concepto.getConceptoId());
+        }
 
-        return inventarioMapper.toCategoriaDTO(concepto);
+        return CategoriaDTO.builder()
+                .categoriaId(concepto.getConceptoId())
+                .codigo(codigo)
+                .nombreCategoria(concepto.getDescripcion())
+                .descripcion(concepto.getDescripcion())
+                .marcaBaja(marcaBaja)
+                .build();
     }
 
     private void aplicarCambiosAPendiente(InventarioPendiente pendiente, RegistroPendienteRequestDTO dto) {
