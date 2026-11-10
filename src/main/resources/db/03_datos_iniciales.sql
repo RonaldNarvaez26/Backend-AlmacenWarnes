@@ -2,32 +2,12 @@
 -- SCRIPT CONSOLIDADO DE DATOS INICIALES (SEED DATA) - ALMACEN WARNES
 -- Archivo: 03_datos_iniciales.sql
 -- Motor: PostgreSQL 14+ / Spring Boot 3+ (Bcrypt JWT)
--- Descripción: Limpieza total de tablas, datos paramétricos completos (Conceptos 1 al 8),
---              Sucursales, 6 Usuarios de prueba con password '123456', Proveedores abundantes,
---              Catálogo de 15 productos, 20 Lotes, 20 Existencias en Inventario,
---              Sala de Espera (4 pendientes) y sincronización de secuencias.
+-- Descripción: Limpieza total de tablas, datos paramétricos completos (Conceptos 1 al 9),
+--              Sucursales, Clientes, 6 Usuarios de prueba con password '123456', Proveedores,
+--              Catálogo de 16 productos, 20 Lotes, 20 Existencias en Inventario,
+--              Sala de Espera (12 pendientes), 2 Ventas y 3 Detalles de Venta,
+--              Historial de Inventario (Kardex inicial) y sincronización de secuencias.
 -- ============================================================================
-
--- ============================================================================
--- PARCHE PREVIO: Asegurar columnas de auditoría y relaciones en tablas clave
--- ============================================================================
-ALTER TABLE sucursales ADD COLUMN IF NOT EXISTS fecha_modificacion TIMESTAMP WITHOUT TIME ZONE NULL;
-ALTER TABLE sucursales ADD COLUMN IF NOT EXISTS usuario_modificacion INTEGER NULL;
-
-ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS sucursal_id INTEGER NULL DEFAULT 0;
-ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_sucursal_id_fkey;
-ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS estado INTEGER NOT NULL DEFAULT 1;
-
-ALTER TABLE proveedores ADD COLUMN IF NOT EXISTS sucursal_id INTEGER NULL REFERENCES sucursales(sucursal_id);
-
-ALTER TABLE inventario_pendientes
-ADD COLUMN IF NOT EXISTS proveedor_id INTEGER NULL REFERENCES proveedores(proveedor_id),
-ADD COLUMN IF NOT EXISTS descripcion_lote VARCHAR(150) NULL,
-ADD COLUMN IF NOT EXISTS precio_lote DECIMAL(8,2) NULL,
-ADD COLUMN IF NOT EXISTS fecha_vencimiento DATE NULL,
-ADD COLUMN IF NOT EXISTS observacion_revision VARCHAR(250) NULL,
-ADD COLUMN IF NOT EXISTS fecha_subsanacion TIMESTAMP WITHOUT TIME ZONE NULL;
-
 -- ============================================================================
 -- 1. LIMPIEZA TOTAL DE TABLAS (WIPE OUT CON TRUNCATE CASCADE)
 -- ============================================================================
@@ -438,340 +418,56 @@ INSERT INTO detalles_ventas (detalle_venta_id, producto_id, venta_id, inventario
 (3, 9, 2, 13, 30.00, 1.00, FALSE);-- 1 Cafe Nescafe = 30.00 (Total Venta 2 = 30.00)
 
 -- ============================================================================
--- 14. FUNCIONES Y PROCEDIMIENTOS DEL MODULO DE CONCEPTOS PARAMETRICOS
+-- 12. HISTORIAL DE INVENTARIO (KARDEX INICIAL)
+-- Registro estático del movimiento inicial de apertura para cada existencia física
 -- ============================================================================
-CREATE OR REPLACE FUNCTION fn_conceptos_listar_por_grupo(p_grupo_id INT)
-RETURNS TABLE (
-    concepto_id INT,
-    codigo INT,
-    descripcion VARCHAR
-)
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    RETURN QUERY
-    SELECT c.concepto_id, c.codigo, c.descripcion::VARCHAR
-    FROM conceptos c
-    WHERE c.grupo_id = p_grupo_id
-      AND c.marca_baja = FALSE
-      AND c.codigo > 0
-    ORDER BY c.codigo ASC;
-END;
-$$;
-
-CREATE OR REPLACE PROCEDURE sp_conceptos_insertar(
-    IN p_grupo_id INT,
-    IN p_descripcion VARCHAR,
-    IN p_usuario_creacion INT,
-    INOUT p_concepto_id INT DEFAULT NULL
-)
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    v_nuevo_codigo INT;
-BEGIN
-    SELECT COALESCE(MAX(codigo), 0) + 1 INTO v_nuevo_codigo
-    FROM conceptos
-    WHERE grupo_id = p_grupo_id;
-
-    INSERT INTO conceptos (
-        grupo_id,
-        codigo,
-        descripcion,
-        marca_baja,
-        fecha_creacion,
-        usuario_creacion
-    ) VALUES (
-        p_grupo_id,
-        v_nuevo_codigo,
-        TRIM(p_descripcion),
-        FALSE,
-        CURRENT_TIMESTAMP,
-        p_usuario_creacion
-    ) RETURNING conceptos.concepto_id INTO p_concepto_id;
-END;
-$$;
-
-CREATE OR REPLACE PROCEDURE sp_conceptos_modificar(
-    IN p_concepto_id INT,
-    IN p_descripcion VARCHAR,
-    IN p_usuario_modificacion INT
-)
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    UPDATE conceptos
-    SET descripcion = TRIM(p_descripcion)
-    WHERE concepto_id = p_concepto_id;
-END;
-$$;
-
-CREATE OR REPLACE PROCEDURE sp_conceptos_eliminar(
-    IN p_concepto_id INT,
-    IN p_usuario_modificacion INT
-)
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    UPDATE conceptos
-    SET marca_baja = TRUE
-    WHERE concepto_id = p_concepto_id;
-END;
-$$;
-
--- ============================================================================
--- 15. FUNCIONES Y PROCEDIMIENTOS DEL MODULO DE SUCURSALES
--- ============================================================================
-CREATE OR REPLACE FUNCTION fn_sucursales_listar(
-    p_mostrar_bajas BOOLEAN DEFAULT FALSE,
-    p_texto_busqueda VARCHAR DEFAULT NULL
-)
-RETURNS TABLE (
-    sucursal_id INT,
-    codigo_interno VARCHAR,
-    ciudad VARCHAR,
-    direccion VARCHAR,
-    telefono VARCHAR,
-    fecha_creacion TIMESTAMP,
-    cantidad_usuarios INT
-)
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    RETURN QUERY
-    SELECT 
-        s.sucursal_id,
-        s.codigo_interno,
-        s.ciudad,
-        s.direccion,
-        s.telefono,
-        s.fecha_creacion,
-        (SELECT COUNT(u.usuario_id)::INT FROM usuarios u WHERE u.sucursal_id = s.sucursal_id AND u.marca_baja = FALSE) AS cantidad_usuarios
-    FROM sucursales s
-    WHERE (p_mostrar_bajas IS TRUE OR s.marca_baja = FALSE)
-      AND (
-          p_texto_busqueda IS NULL 
-          OR s.codigo_interno ILIKE '%' || p_texto_busqueda || '%'
-          OR s.ciudad ILIKE '%' || p_texto_busqueda || '%'
-          OR s.direccion ILIKE '%' || p_texto_busqueda || '%'
-      )
-    ORDER BY s.sucursal_id ASC;
-END;
-$$;
-
-CREATE OR REPLACE PROCEDURE sp_sucursales_insertar(
-    IN p_codigo_interno VARCHAR,
-    IN p_ciudad VARCHAR,
-    IN p_direccion VARCHAR,
-    IN p_telefono VARCHAR,
-    IN p_usuario_creacion INT,
-    INOUT p_sucursal_id INT DEFAULT NULL
-)
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    INSERT INTO sucursales (
-        codigo_interno,
-        ciudad,
-        direccion,
-        telefono,
-        marca_baja,
-        fecha_creacion,
-        usuario_creacion
-    ) VALUES (
-        p_codigo_interno,
-        p_ciudad,
-        p_direccion,
-        p_telefono,
-        FALSE,
-        CURRENT_TIMESTAMP,
-        p_usuario_creacion
-    ) RETURNING sucursales.sucursal_id INTO p_sucursal_id;
-END;
-$$;
-
-CREATE OR REPLACE PROCEDURE sp_sucursales_modificar(
-    IN p_sucursal_id INT,
-    IN p_codigo_interno VARCHAR,
-    IN p_ciudad VARCHAR,
-    IN p_direccion VARCHAR,
-    IN p_telefono VARCHAR,
-    IN p_usuario_modificacion INT
-)
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    UPDATE sucursales
-    SET codigo_interno = COALESCE(p_codigo_interno, codigo_interno),
-        ciudad = COALESCE(p_ciudad, ciudad),
-        direccion = COALESCE(p_direccion, direccion),
-        telefono = COALESCE(p_telefono, telefono),
-        fecha_modificacion = CURRENT_TIMESTAMP,
-        usuario_modificacion = p_usuario_modificacion
-    WHERE sucursal_id = p_sucursal_id;
-END;
-$$;
-
-CREATE OR REPLACE PROCEDURE sp_sucursales_eliminar(
-    IN p_sucursal_id INT,
-    IN p_usuario_modificacion INT
-)
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    UPDATE sucursales
-    SET marca_baja = TRUE,
-        fecha_modificacion = CURRENT_TIMESTAMP,
-        usuario_modificacion = p_usuario_modificacion
-    WHERE sucursal_id = p_sucursal_id;
-END;
-$$;
-
-
--- -------------------------------------------------------------
--- HISTORIAL_INVENTARIO (KARDEX DE MOVIMIENTOS)
--- -------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS Historial_Inventario (
-    historial_id serial NOT NULL,
-    sucursal_id int NOT NULL,
-    producto_id int NOT NULL,
-    tipo_movimiento int NOT NULL, -- Grupo 9 de Conceptos: 1=Ingreso, 2=Egreso, 3=Ajuste
-    stock_anterior int NOT NULL,
-    stock_resultante int NOT NULL,
-    descripcion varchar(200) NOT NULL,
-    marca_baja boolean NOT NULL DEFAULT FALSE,
-    fecha_creacion timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    usuario_creacion int NOT NULL,
-    usuario_autorizacion int NULL,
-    CONSTRAINT Historial_Inventario_pk PRIMARY KEY (historial_id),
-    CONSTRAINT Historial_Inventario_Sucursales FOREIGN KEY (sucursal_id) REFERENCES Sucursales (sucursal_id),
-    CONSTRAINT Historial_Inventario_Productos FOREIGN KEY (producto_id) REFERENCES Productos (producto_id)
-);
-
--- Parche para alinear estructura oficial si la tabla fue creada previamente con columnas extra
-ALTER TABLE Historial_Inventario DROP COLUMN IF EXISTS lote_id;
-ALTER TABLE Historial_Inventario DROP COLUMN IF EXISTS cantidad;
-ALTER TABLE Historial_Inventario ALTER COLUMN descripcion SET NOT NULL;
-ALTER TABLE Historial_Inventario DROP CONSTRAINT IF EXISTS historial_inventario_usuario_autorizacion_fkey;
-ALTER TABLE Historial_Inventario DROP CONSTRAINT IF EXISTS historial_inventario_usuario_creacion_fkey;
-
-CREATE INDEX IF NOT EXISTS idx_historial_inventario_sucursal ON historial_inventario(sucursal_id);
-CREATE INDEX IF NOT EXISTS idx_historial_inventario_producto ON historial_inventario(producto_id);
-CREATE INDEX IF NOT EXISTS idx_historial_inventario_tipo ON historial_inventario(tipo_movimiento);
-CREATE INDEX IF NOT EXISTS idx_historial_inventario_fecha ON historial_inventario(fecha_creacion DESC);
-
--- Restaurar Grupo 6: Tipos de Movimientos (Caja / Flujo)
-UPDATE conceptos SET descripcion = 'Tipo de Movimientos' WHERE grupo_id = 6 AND codigo = 0;
-UPDATE conceptos SET descripcion = 'Entrada' WHERE grupo_id = 6 AND codigo = 1;
-UPDATE conceptos SET descripcion = 'Salida' WHERE grupo_id = 6 AND codigo = 2;
-DELETE FROM conceptos WHERE grupo_id = 6 AND codigo = 3;
-
--- Conceptos Grupo 9: Tipo Movimiento Inventario (Kardex)
-INSERT INTO conceptos (concepto_id, grupo_id, codigo, descripcion, marca_baja, fecha_creacion, usuario_creacion)
-SELECT 36, 9, 0, 'Tipo Movimiento Inventario', FALSE, CURRENT_TIMESTAMP, 1
-WHERE NOT EXISTS (SELECT 1 FROM conceptos WHERE grupo_id = 9 AND codigo = 0);
-
-INSERT INTO conceptos (concepto_id, grupo_id, codigo, descripcion, marca_baja, fecha_creacion, usuario_creacion)
-SELECT 37, 9, 1, 'Ingreso', FALSE, CURRENT_TIMESTAMP, 1
-WHERE NOT EXISTS (SELECT 1 FROM conceptos WHERE grupo_id = 9 AND codigo = 1);
-
-INSERT INTO conceptos (concepto_id, grupo_id, codigo, descripcion, marca_baja, fecha_creacion, usuario_creacion)
-SELECT 38, 9, 2, 'Egreso', FALSE, CURRENT_TIMESTAMP, 1
-WHERE NOT EXISTS (SELECT 1 FROM conceptos WHERE grupo_id = 9 AND codigo = 2);
-
-INSERT INTO conceptos (concepto_id, grupo_id, codigo, descripcion, marca_baja, fecha_creacion, usuario_creacion)
-SELECT 39, 9, 3, 'Ajuste', FALSE, CURRENT_TIMESTAMP, 1
-WHERE NOT EXISTS (SELECT 1 FROM conceptos WHERE grupo_id = 9 AND codigo = 3);
-
-CREATE OR REPLACE FUNCTION fn_historial_inventario_listar(
-    p_sucursal_id INT DEFAULT NULL,
-    p_producto_id INT DEFAULT NULL,
-    p_tipo_movimiento INT DEFAULT NULL
-)
-RETURNS TABLE (
-    historial_id INT,
-    sucursal_id INT,
-    codigo_sucursal VARCHAR,
-    ciudad_sucursal VARCHAR,
-    producto_id INT,
-    codigo_interno VARCHAR,
-    codigo_barras VARCHAR,
-    nombre_producto VARCHAR,
-    lote_id INT,
-    descripcion_lote VARCHAR,
-    tipo_movimiento INT,
-    nombre_tipo_movimiento VARCHAR,
-    stock_anterior INT,
-    cantidad INT,
-    stock_resultante INT,
-    descripcion VARCHAR,
-    marca_baja BOOLEAN,
-    fecha_creacion TIMESTAMP,
-    usuario_creacion INT,
-    nombre_usuario_creacion VARCHAR,
-    usuario_autorizacion INT,
-    nombre_usuario_autorizacion VARCHAR
-)
-LANGUAGE plpgsql
-AS $$
-#variable_conflict use_column
-BEGIN
-    RETURN QUERY
-    SELECT 
-        h.historial_id,
-        h.sucursal_id,
-        s.codigo_interno AS codigo_sucursal,
-        s.ciudad AS ciudad_sucursal,
-        h.producto_id,
-        p.codigo_interno,
-        p.codigo_barras,
-        p.nombre_producto,
-        NULL::INT AS lote_id,
-        NULL::VARCHAR AS descripcion_lote,
-        h.tipo_movimiento,
-        COALESCE(c.descripcion, 'Movimiento ' || h.tipo_movimiento)::VARCHAR AS nombre_tipo_movimiento,
-        h.stock_anterior,
-        ABS(h.stock_resultante - h.stock_anterior)::INT AS cantidad,
-        h.stock_resultante,
-        h.descripcion,
-        h.marca_baja,
-        h.fecha_creacion,
-        h.usuario_creacion,
-        (COALESCE(uc.nombres, '') || ' ' || COALESCE(uc.apellidos, ''))::VARCHAR AS nombre_usuario_creacion,
-        h.usuario_autorizacion,
-        (COALESCE(ua.nombres, '') || ' ' || COALESCE(ua.apellidos, ''))::VARCHAR AS nombre_usuario_autorizacion
-    FROM historial_inventario h
-    JOIN productos p ON p.producto_id = h.producto_id
-    JOIN sucursales s ON s.sucursal_id = h.sucursal_id
-    LEFT JOIN conceptos c ON c.grupo_id = 9 AND c.codigo = h.tipo_movimiento AND c.marca_baja = FALSE
-    LEFT JOIN usuarios uc ON uc.usuario_id = h.usuario_creacion
-    LEFT JOIN usuarios ua ON ua.usuario_id = h.usuario_autorizacion
-    WHERE (p_sucursal_id IS NULL OR p_sucursal_id = 0 OR h.sucursal_id = p_sucursal_id)
-      AND (p_producto_id IS NULL OR p_producto_id = 0 OR h.producto_id = p_producto_id)
-      AND (p_tipo_movimiento IS NULL OR p_tipo_movimiento = 0 OR h.tipo_movimiento = p_tipo_movimiento)
-      AND h.marca_baja = FALSE
-    ORDER BY h.fecha_creacion DESC, h.historial_id DESC;
-END;
-$$;
-
--- Poblado inicial de historial_inventario a partir del inventario activo
 INSERT INTO Historial_Inventario (
-    sucursal_id, producto_id, tipo_movimiento,
+    historial_id, sucursal_id, producto_id, tipo_movimiento,
     stock_anterior, stock_resultante,
     descripcion, marca_baja, fecha_creacion,
     usuario_creacion, usuario_autorizacion
-)
-SELECT 
-    i.sucursal_id,
-    i.producto_id,
-    1, -- 1 = Ingreso (Grupo 9)
-    0,
-    i.stock,
-    'Stock inicial de apertura de almacen',
-    FALSE,
-    i.fecha_creacion,
-    i.usuario_creacion,
-    i.usuario_creacion
-FROM inventario i
-WHERE i.marca_baja = FALSE
-  AND NOT EXISTS (SELECT 1 FROM Historial_Inventario h WHERE h.producto_id = i.producto_id AND h.sucursal_id = i.sucursal_id);
+) VALUES
+-- SUCURSAL 1 (Warnes Central - SUC-001) - Supervisor Carlos Mendoza (ID=3)
+(1,  1, 1,  1, 0,  18, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+(2,  1, 1,  1, 18, 78, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+(3,  1, 2,  1, 0,  25, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+(4,  1, 3,  1, 0,  12, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+(5,  1, 3,  1, 12, 52, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+(6,  1, 4,  1, 0,  15, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+(7,  1, 5,  1, 0,  45, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+(8,  1, 5,  1, 45, 60, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+(9,  1, 6,  1, 0,  28, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+(10, 1, 7,  1, 0,  38, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+(11, 1, 7,  1, 38, 58, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+(12, 1, 8,  1, 0,  42, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+
+-- SUCURSAL 2 (Warnes Norte - SUC-002) - Supervisora Patricia Benitez (ID=4)
+(13, 2, 9,  1, 0, 14, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 4, 4),
+(14, 2, 10, 1, 0, 32, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 4, 4),
+(15, 2, 11, 1, 0, 26, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 4, 4),
+(16, 2, 12, 1, 0, 55, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 4, 4),
+(17, 2, 13, 1, 0, 45, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 4, 4),
+(18, 2, 15, 1, 0, 22, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 4, 4);
+
+-- ============================================================================
+-- 13. SINCRONIZACION DE SECUENCIAS
+-- ============================================================================
+SELECT setval('conceptos_concepto_id_seq', (SELECT MAX(concepto_id) FROM conceptos));
+SELECT setval('sucursales_sucursal_id_seq', (SELECT MAX(sucursal_id) FROM sucursales));
+SELECT setval('usuarios_usuario_id_seq', (SELECT MAX(usuario_id) FROM usuarios));
+SELECT setval('proveedores_proveedor_id_seq', (SELECT MAX(proveedor_id) FROM proveedores));
+SELECT setval('productos_producto_id_seq', (SELECT MAX(producto_id) FROM productos));
+SELECT setval('lotes_lote_id_seq', (SELECT MAX(lote_id) FROM lotes));
+SELECT setval('inventario_inventario_id_seq', (SELECT MAX(inventario_id) FROM inventario));
+SELECT setval('inventario_pendientes_inventario_pendiente_id_seq', (SELECT MAX(inventario_pendiente_id) FROM inventario_pendientes));
+SELECT setval('clientes_cliente_id_seq', (SELECT MAX(cliente_id) FROM clientes));
+SELECT setval('ventas_venta_id_seq', (SELECT MAX(venta_id) FROM ventas));
+SELECT setval('detalles_ventas_detalle_venta_id_seq', (SELECT MAX(detalle_venta_id) FROM detalles_ventas));
+SELECT setval('historial_inventario_historial_id_seq', (SELECT MAX(historial_id) FROM historial_inventario));
+SELECT setval('reportes_reporte_id_seq', 1, false);
+SELECT setval('movimientos_movimiento_id_seq', 1, false);
+SELECT setval('entradas_entrada_id_seq', 1, false);
+SELECT setval('salidas_salida_id_seq', 1, false);
+SELECT setval('sesiones_sesion_id_seq', 1, false);
+
+

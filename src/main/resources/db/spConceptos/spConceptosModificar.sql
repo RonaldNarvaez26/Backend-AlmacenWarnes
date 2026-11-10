@@ -3,6 +3,9 @@
 -- DESCRIPCION:     MODIFICAR LA DESCRIPCION DE UN CONCEPTO
 -- SEGURIDAD:       Protege grupos estructurales del sistema (solo Propietario / rol 3)
 -- ============================================================================================
+DROP PROCEDURE IF EXISTS sp_conceptos_modificar;
+DROP PROCEDURE IF EXISTS sp_conceptos_modificar(INT, VARCHAR, INT);
+
 CREATE OR REPLACE PROCEDURE sp_conceptos_modificar(
     p_concepto_id INT,
     p_descripcion VARCHAR,

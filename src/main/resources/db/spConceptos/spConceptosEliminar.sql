@@ -3,6 +3,9 @@
 -- DESCRIPCION:     ELIMINAR LOGICAMENTE UN CONCEPTO
 -- SEGURIDAD:       Prohíbe eliminación de conceptos de grupos estructurales del sistema
 -- ============================================================================================
+DROP PROCEDURE IF EXISTS sp_conceptos_eliminar;
+DROP PROCEDURE IF EXISTS sp_conceptos_eliminar(INT, INT);
+
 CREATE OR REPLACE PROCEDURE sp_conceptos_eliminar(
     p_concepto_id INT,
     p_usuario_modificacion INT
