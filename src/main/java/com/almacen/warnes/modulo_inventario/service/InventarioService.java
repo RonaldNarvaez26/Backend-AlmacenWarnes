@@ -45,6 +45,7 @@ public class InventarioService {
     private final InventarioProcedureRepository inventarioProcedureRepository;
     private final LoteRepository loteRepository;
     private final ProveedorRepository proveedorRepository;
+    private final HistorialInventarioRepository historialInventarioRepository;
     private final ConceptoService conceptoService;
     private final InventarioMapper inventarioMapper;
     private final ProductoMapper productoMapper;
@@ -630,5 +631,12 @@ public class InventarioService {
         if (dto.getFechaSubsanacion() != null) {
             pendiente.setFechaSubsanacion(dto.getFechaSubsanacion());
         }
+    }
+
+    public List<HistorialInventarioDTO> listarHistorial(Integer sucursalId, Integer productoId, Integer tipoMovimiento) {
+        return historialInventarioRepository.listarHistorial(sucursalId, productoId, tipoMovimiento)
+                .stream()
+                .map(inventarioMapper::toHistorialDTO)
+                .collect(Collectors.toList());
     }
 }

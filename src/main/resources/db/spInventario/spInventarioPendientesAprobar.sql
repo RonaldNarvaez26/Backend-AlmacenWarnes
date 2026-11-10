@@ -22,12 +22,17 @@ DECLARE
     v_fecha_vencimiento DATE;
     v_sucursal_id INT;
     v_nuevo_lote_id INT;
+    v_usuario_creacion_solicitud INT;
+    v_stock_anterior INT := 0;
+    v_stock_resultante INT := 0;
 BEGIN
     -- Seleccionar columnas físicas incluyendo lote, sucursal_id y vencimiento desde inventario_pendientes
     SELECT producto_id, sucursal_id, categoria_id, nombre_producto, codigo_barras, codigo_interno, 
-           stock_ingresado, precio_compra, precio_venta, proveedor_id, descripcion_lote, fecha_vencimiento
+           stock_ingresado, precio_compra, precio_venta, proveedor_id, descripcion_lote, fecha_vencimiento,
+           usuario_creacion
     INTO v_producto_id, v_sucursal_id, v_categoria_id, v_nombre_producto, v_codigo_barras, v_codigo_interno,
-         v_stock_ingresado, v_precio_compra, v_precio_venta, v_proveedor_id, v_descripcion_lote, v_fecha_vencimiento
+         v_stock_ingresado, v_precio_compra, v_precio_venta, v_proveedor_id, v_descripcion_lote, v_fecha_vencimiento,
+         v_usuario_creacion_solicitud
     FROM inventario_pendientes
     WHERE inventario_pendiente_id = p_inventario_pendiente_id
       AND marca_baja = FALSE
@@ -138,6 +143,13 @@ BEGIN
     )
     RETURNING lote_id INTO v_nuevo_lote_id;
 
+    -- Calcular stock previo del producto en la sucursal antes de asentar el nuevo lote
+    SELECT COALESCE(SUM(stock), 0) INTO v_stock_anterior
+    FROM inventario
+    WHERE producto_id = v_producto_id AND sucursal_id = v_sucursal_id AND marca_baja = FALSE;
+
+    v_stock_resultante := v_stock_anterior + v_stock_ingresado;
+
     -- Crear el registro en inventario físico con sucursal_id real
     INSERT INTO inventario (
         sucursal_id, lote_id, producto_id, stock, en_descuento,
@@ -150,6 +162,25 @@ BEGIN
         FALSE,
         FALSE,
         CURRENT_TIMESTAMP,
+        p_usuario_revision
+    );
+
+    -- Registrar movimiento en kardex historial_inventario (Tipo 1: Ingreso)
+    INSERT INTO historial_inventario (
+        sucursal_id, producto_id, tipo_movimiento,
+        stock_anterior, stock_resultante,
+        descripcion, marca_baja, fecha_creacion,
+        usuario_creacion, usuario_autorizacion
+    ) VALUES (
+        v_sucursal_id,
+        v_producto_id,
+        1, -- 1 = Ingreso
+        v_stock_anterior,
+        v_stock_resultante,
+        COALESCE('Ingreso por aprobacion en Sala de Espera' || CASE WHEN v_descripcion_lote IS NOT NULL THEN ' - ' || v_descripcion_lote ELSE '' END, 'Ingreso por aprobacion en Sala de Espera'),
+        FALSE,
+        CURRENT_TIMESTAMP,
+        COALESCE(v_usuario_creacion_solicitud, p_usuario_revision),
         p_usuario_revision
     );
 
