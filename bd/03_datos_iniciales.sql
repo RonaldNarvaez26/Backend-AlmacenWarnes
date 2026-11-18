@@ -20,6 +20,7 @@ TRUNCATE TABLE
     reportes,
     sesiones,
     historial_inventario,
+    notificaciones,
     inventario_pendientes,
     inventario,
     lotes,
@@ -99,7 +100,28 @@ INSERT INTO conceptos (concepto_id, grupo_id, codigo, descripcion, marca_baja, f
 (36, 9, 0, 'Tipo Movimiento Inventario', FALSE, CURRENT_TIMESTAMP, 1),
 (37, 9, 1, 'Ingreso',                   FALSE, CURRENT_TIMESTAMP, 1),
 (38, 9, 2, 'Egreso',                    FALSE, CURRENT_TIMESTAMP, 1),
-(39, 9, 3, 'Ajuste',                    FALSE, CURRENT_TIMESTAMP, 1);
+(39, 9, 3, 'Ajuste',                    FALSE, CURRENT_TIMESTAMP, 1),
+
+-- Grupo 10: Tipos de Notificación y Alertas Internas
+(40, 10, 0, 'Tipos de Notificación',                 FALSE, CURRENT_TIMESTAMP, 1),
+(41, 10, 1, 'Stock Agotado',                         FALSE, CURRENT_TIMESTAMP, 1),
+(42, 10, 2, 'Stock Bajo',                            FALSE, CURRENT_TIMESTAMP, 1),
+(43, 10, 3, 'Sala de Espera (Ingreso Pendiente)',    FALSE, CURRENT_TIMESTAMP, 1),
+(44, 10, 4, 'Sala de Espera (Mercadería Observada)', FALSE, CURRENT_TIMESTAMP, 1),
+(45, 10, 5, 'Solicitud de Acceso a Dashboard',       FALSE, CURRENT_TIMESTAMP, 1),
+(46, 10, 6, 'Acceso a Dashboard Autorizado',         FALSE, CURRENT_TIMESTAMP, 1),
+(47, 10, 7, 'Recuperación de Contraseña',            FALSE, CURRENT_TIMESTAMP, 1),
+(48, 10, 8, 'Usuario Bloqueado',                     FALSE, CURRENT_TIMESTAMP, 1),
+(49, 10, 9, 'Lote Próximo a Vencer',                 FALSE, CURRENT_TIMESTAMP, 1),
+(50, 10, 10, 'Lote Vencido',                         FALSE, CURRENT_TIMESTAMP, 1),
+
+-- Grupo 11: Umbrales de Alerta de Vencimiento por Categoría (en días)
+(51, 11, 0, 'Umbral Días Alerta Vencimiento por Categoría', FALSE, CURRENT_TIMESTAMP, 1),
+(52, 11, 1, '15', FALSE, CURRENT_TIMESTAMP, 1),
+(53, 11, 2, '30', FALSE, CURRENT_TIMESTAMP, 1),
+(54, 11, 3, '45', FALSE, CURRENT_TIMESTAMP, 1),
+(55, 11, 4, '30', FALSE, CURRENT_TIMESTAMP, 1),
+(56, 11, 5, '60', FALSE, CURRENT_TIMESTAMP, 1);
 
 -- ============================================================================
 -- 3. SUCURSALES (TABLA: SUCURSALES)
@@ -224,7 +246,7 @@ INSERT INTO lotes (
 
 -- Producto 5: Coca-Cola 2L (2 lotes: normal y bonificacion)
 (7,  2, 'Lote Coca-Cola 2L Cajas Preventa',               50, 425.00, 8.50, CURRENT_DATE + INTERVAL '120 days', FALSE, CURRENT_TIMESTAMP, 3),
-(8,  2, 'Lote Coca-Cola 2L Bonificacion Extra',           15, 120.00, 8.00, CURRENT_DATE + INTERVAL '95 days',  FALSE, CURRENT_TIMESTAMP, 3),
+(8,  2, 'Lote Coca-Cola 2L Bonificacion Extra',           15, 120.00, 8.00, CURRENT_DATE + INTERVAL '18 days',  FALSE, CURRENT_TIMESTAMP, 3),
 
 -- Producto 6: Sprite 2L
 (9,  2, 'Lote Sprite 2L Cajas Preventa',                  30, 255.00, 8.50, CURRENT_DATE + INTERVAL '120 days', FALSE, CURRENT_TIMESTAMP, 3),
@@ -234,7 +256,7 @@ INSERT INTO lotes (
 (11, 2, 'Lote Agua Vital 2L Emergencia Reserva',          20, 90.00,  4.50, CURRENT_DATE + INTERVAL '210 days', FALSE, CURRENT_TIMESTAMP, 3),
 
 -- Producto 8: Malta Maltin
-(12, 3, 'Lote Maltin 330ml Sixpacks',                     48, 192.00, 4.00, CURRENT_DATE + INTERVAL '90 days',  FALSE, CURRENT_TIMESTAMP, 3),
+(12, 3, 'Lote Maltin 330ml Sixpacks',                     48, 192.00, 4.00, CURRENT_DATE - INTERVAL '2 days',   FALSE, CURRENT_TIMESTAMP, 3),
 
 -- Producto 9: Cafe Nescafe
 (13, 8, 'Lote Nescafe Tradicion Lata 200g',               15, 360.00, 24.00,CURRENT_DATE + INTERVAL '300 days', FALSE, CURRENT_TIMESTAMP, 3),
@@ -247,7 +269,7 @@ INSERT INTO lotes (
 
 -- Producto 12 y 13: Galletas Mabel's
 (16, 5, 'Lote Galletas Wafer Mabel''s',                   60, 192.00, 3.20, CURRENT_DATE + INTERVAL '110 days', FALSE, CURRENT_TIMESTAMP, 3),
-(17, 5, 'Lote Galletas Cremositas Mabel''s',               50, 140.00, 2.80, CURRENT_DATE + INTERVAL '100 days', FALSE, CURRENT_TIMESTAMP, 3),
+(17, 5, 'Lote Galletas Cremositas Mabel''s',               50, 140.00, 2.80, CURRENT_DATE + INTERVAL '12 days',  FALSE, CURRENT_TIMESTAMP, 3),
 
 -- Producto 14: Chocolate Sublime (Dado de baja logica para restauracion)
 (18, 8, 'Lote Chocolate Sublime Descontinuado',           20, 70.00,  3.50, CURRENT_DATE + INTERVAL '15 days',  TRUE,  CURRENT_TIMESTAMP, 3),
@@ -417,7 +439,6 @@ INSERT INTO detalles_ventas (detalle_venta_id, producto_id, venta_id, inventario
 (2, 5, 1, 7, 11.00, 1.00, FALSE),-- 1 Coca-Cola = 11.00 (Total Venta 1 = 24.00)
 (3, 9, 2, 13, 30.00, 1.00, FALSE);-- 1 Cafe Nescafe = 30.00 (Total Venta 2 = 30.00)
 
-
 -- ============================================================================
 -- 12. HISTORIAL DE INVENTARIO (KARDEX INICIAL)
 -- Registro estático del movimiento inicial de apertura para cada existencia física
@@ -451,7 +472,20 @@ INSERT INTO Historial_Inventario (
 (18, 2, 15, 1, 0, 22, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 4, 4);
 
 -- ============================================================================
--- 13. SINCRONIZACION DE SECUENCIAS
+-- 13. NOTIFICACIONES INICIALES (TABLA: NOTIFICACIONES)
+-- ============================================================================
+INSERT INTO Notificaciones (
+    usuario_destino, rol_destino, tipo_notificacion,
+    titulo_alerta, mensaje_alerta, direccion,
+    leido, fecha_emision, fecha_leido
+) VALUES
+(5, 1, 4, 'Mercadería Observada para Corrección', 'El lote de Malta Maltin Clasica 330ml en SUC-001 fue observado: Costo unitario declarado no coincide con el acuerdo oficial.', '/inventario?tab=pendientes', FALSE, CURRENT_TIMESTAMP, NULL),
+(NULL, 2, 3, 'Ingreso Pendiente en Sala de Espera', 'Existen 5 lotes pendientes de autorización en SUC-001.', '/inventario?tab=pendientes', FALSE, CURRENT_TIMESTAMP, NULL),
+(NULL, 3, 3, 'Ingreso Pendiente en Sala de Espera', 'Existen 9 lotes pendientes de autorización a nivel global.', '/inventario?tab=pendientes', FALSE, CURRENT_TIMESTAMP, NULL),
+(NULL, 3, 7, 'Solicitud de Restablecimiento de Contraseña', 'El usuario pedro.cajero2 (@pedro.cajero2) ha solicitado el restablecimiento de su contraseña de acceso.', '/admin/usuarios', FALSE, CURRENT_TIMESTAMP, NULL);
+
+-- ============================================================================
+-- 14. SINCRONIZACION DE SECUENCIAS
 -- ============================================================================
 SELECT setval('conceptos_concepto_id_seq', (SELECT MAX(concepto_id) FROM conceptos));
 SELECT setval('sucursales_sucursal_id_seq', (SELECT MAX(sucursal_id) FROM sucursales));
@@ -465,6 +499,7 @@ SELECT setval('clientes_cliente_id_seq', (SELECT MAX(cliente_id) FROM clientes))
 SELECT setval('ventas_venta_id_seq', (SELECT MAX(venta_id) FROM ventas));
 SELECT setval('detalles_ventas_detalle_venta_id_seq', (SELECT MAX(detalle_venta_id) FROM detalles_ventas));
 SELECT setval('historial_inventario_historial_id_seq', (SELECT MAX(historial_id) FROM historial_inventario));
+SELECT setval('notificaciones_id_notificacion_seq', COALESCE((SELECT MAX(id_notificacion) FROM notificaciones), 1), (SELECT COUNT(*) > 0 FROM notificaciones));
 SELECT setval('reportes_reporte_id_seq', 1, false);
 SELECT setval('movimientos_movimiento_id_seq', 1, false);
 SELECT setval('entradas_entrada_id_seq', 1, false);
