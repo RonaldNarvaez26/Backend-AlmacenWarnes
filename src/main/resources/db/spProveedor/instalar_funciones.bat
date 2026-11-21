@@ -1,38 +1,64 @@
 @echo off
+setlocal enabledelayedexpansion
+chcp 65001 > nul
+set PGCLIENTENCODING=UTF8
+
 echo =======================================================
-echo Instalando Modulo de Proveedores y Logistica en AlmacenWarnes
+echo Instalando Procedimientos y Funciones de Proveedores
+echo Base de datos: AlmacenWarnes
 echo =======================================================
+echo.
 
-:: RUTA EXACTA A PSQL (Ajusta la version si es necesario)
-set "PSQL_PATH=C:\Program Files\PostgreSQL\18\bin\psql.exe"
+:: DETECCION AUTOMATICA DE PSQL
+set "PSQL_PATH="
+where psql.exe >nul 2>&1
+if !errorlevel! equ 0 (
+    set "PSQL_PATH=psql.exe"
+) else (
+    for %%V in (16 17 18 15 14 13 12) do (
+        if not defined PSQL_PATH (
+            if exist "C:\Program Files\PostgreSQL\%%V\bin\psql.exe" (
+                set "PSQL_PATH=C:\Program Files\PostgreSQL\%%V\bin\psql.exe"
+            )
+        )
+    )
+)
 
-:: Pide la contrasena una sola vez y la guarda temporalmente
-set /p pg_pass="Ingresa la contrasena del usuario postgres: "
-set PGPASSWORD=%pg_pass%
+if not defined PSQL_PATH (
+    echo [ERROR] No se encontro psql.exe.
+    set /p "PSQL_PATH=Ingresa la ruta completa a psql.exe: "
+)
 
-echo Instalando 1/6: Resumen de KPIs de Proveedores...
-"%PSQL_PATH%" -U postgres -d AlmacenWarnes -f "spProveedorKpiResumen.sql"
+echo [OK] Usando: "!PSQL_PATH!"
+echo.
 
-echo Instalando 2/6: Listado con Busqueda Avanzada de Proveedores...
-"%PSQL_PATH%" -U postgres -d AlmacenWarnes -f "spProveedorListar.sql"
+:: Pide la contrasena una sola vez o usa admin por defecto
+set /p pg_pass="Ingresa la contrasena de postgres [ENTER para 'admin']: "
+if "%pg_pass%"=="" (
+    set "PGPASSWORD=admin"
+) else (
+    set "PGPASSWORD=%pg_pass%"
+)
 
-echo Instalando 3/6: Procedimientos ABM (Registrar, Actualizar, Baja)...
-"%PSQL_PATH%" -U postgres -d AlmacenWarnes -f "spProveedorAbm.sql"
+echo Instalando 1/5: Resumen de KPIs de Proveedores...
+"%PSQL_PATH%" -h localhost -p 5432 -U postgres -d AlmacenWarnes -f "%~dp0spProveedorKpiResumen.sql"
 
-echo Instalando 4/6: Catalogo de Productos por Proveedor...
-"%PSQL_PATH%" -U postgres -d AlmacenWarnes -f "spProveedorCatalogoProductos.sql"
+echo Instalando 2/5: Listado con Busqueda Avanzada de Proveedores...
+"%PSQL_PATH%" -h localhost -p 5432 -U postgres -d AlmacenWarnes -f "%~dp0spProveedorListar.sql"
 
-echo Instalando 5/6: Historial de Lotes y Trazabilidad...
-"%PSQL_PATH%" -U postgres -d AlmacenWarnes -f "spProveedorHistorialLotes.sql"
+echo Instalando 3/5: Procedimientos ABM (Registrar, Actualizar, Baja)...
+"%PSQL_PATH%" -h localhost -p 5432 -U postgres -d AlmacenWarnes -f "%~dp0spProveedorAbm.sql"
 
-echo Instalando 6/6: Datos Semilla de Contratos Logísticos...
-"%PSQL_PATH%" -U postgres -d AlmacenWarnes -f "entradaDatos.sql"
+echo Instalando 4/5: Catalogo de Productos por Proveedor...
+"%PSQL_PATH%" -h localhost -p 5432 -U postgres -d AlmacenWarnes -f "%~dp0spProveedorCatalogoProductos.sql"
+
+echo Instalando 5/5: Historial de Lotes y Trazabilidad...
+"%PSQL_PATH%" -h localhost -p 5432 -U postgres -d AlmacenWarnes -f "%~dp0spProveedorHistorialLotes.sql"
 
 :: Limpia la contrasena de la memoria por seguridad
 set PGPASSWORD=
 
 echo =======================================================
-echo Instalacion de Modulo de Proveedores completada exitosamente.
+echo Instalacion de Modulo de Proveedores completada.
 echo =======================================================
 pause
-
