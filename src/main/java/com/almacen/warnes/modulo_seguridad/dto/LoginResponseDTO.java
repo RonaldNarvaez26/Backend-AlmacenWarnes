@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -18,6 +20,8 @@ public class LoginResponseDTO {
     private String apellidos;
     private Integer rolId;
     private Integer estado;
+    private Integer sesionId;
+    private LocalDateTime horaSesionAbierta;
     private String mensaje;
 }
 

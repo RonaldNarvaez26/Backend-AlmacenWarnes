@@ -28,6 +28,7 @@ public class UsuarioService {
     private final JdbcTemplate jdbcTemplate;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final com.almacen.warnes.modulo_seguridad.repository.SesionRepository sesionRepository;
 
     // =========================================================================
     // 1. GESTION DE USUARIOS (CRUD Y PROCEDURES)
@@ -145,6 +146,20 @@ public class UsuarioService {
 
         String token = jwtService.generarToken(usuario.getUsuarioId(), usuario.getUsuario(), usuario.getRolId());
 
+        // Invocación a sp_sesiones_abrir: abre nueva sesión o retoma la sesión activa previa sin duplicar
+        Integer sesionId = null;
+        LocalDateTime horaSesionAbierta = null;
+        try {
+            sesionId = sesionRepository.abrirSesion(usuario.getUsuarioId());
+            horaSesionAbierta = sesionRepository.obtenerSesionActiva(usuario.getUsuarioId())
+                    .map(SesionDTO::getHoraSesionAbierta)
+                    .orElse(LocalDateTime.now());
+        } catch (Exception e) {
+            // Loguear error pero no truncar el login si ocurre una eventualidad en sesiones
+            org.slf4j.LoggerFactory.getLogger(UsuarioService.class)
+                    .error("Error al registrar sesión para usuarioId {}: {}", usuario.getUsuarioId(), e.getMessage());
+        }
+
         return LoginResponseDTO.builder()
                 .token(token)
                 .usuarioId(usuario.getUsuarioId())
@@ -154,6 +169,8 @@ public class UsuarioService {
                 .apellidos(usuario.getApellidos())
                 .rolId(usuario.getRolId())
                 .estado(usuario.getEstado())
+                .sesionId(sesionId)
+                .horaSesionAbierta(horaSesionAbierta)
                 .mensaje("Inicio de sesión exitoso")
                 .build();
     }
