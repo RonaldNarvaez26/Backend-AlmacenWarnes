@@ -3,11 +3,15 @@
 -- DESCRIPCION:     AGREGAR UN NUEVO CONCEPTO A UN GRUPO ESPECÍFICO (EJ. CATEGORÍAS)
 -- SEGURIDAD:       Protege grupos estructurales del sistema (solo Propietario / rol 3)
 -- ============================================================================================
+DROP PROCEDURE IF EXISTS sp_conceptos_insertar;
+DROP PROCEDURE IF EXISTS sp_conceptos_insertar(INT, VARCHAR, INT, INT);
+DROP PROCEDURE IF EXISTS sp_conceptos_insertar(INT, VARCHAR, INT);
+
 CREATE OR REPLACE PROCEDURE sp_conceptos_insertar(
-    p_grupo_id INT,
-    p_descripcion VARCHAR,
-    p_usuario_creacion INT,
-    INOUT p_nuevo_concepto_id INT DEFAULT NULL
+    IN p_grupo_id INT,
+    IN p_descripcion VARCHAR,
+    IN p_usuario_creacion INT,
+    OUT p_concepto_id INT
 )
 LANGUAGE plpgsql
 AS $$
@@ -46,6 +50,6 @@ BEGIN
     VALUES (
         p_grupo_id, v_siguiente_codigo, TRIM(p_descripcion), false, CURRENT_TIMESTAMP, p_usuario_creacion
     )
-    RETURNING concepto_id INTO p_nuevo_concepto_id;
+    RETURNING conceptos.concepto_id INTO p_concepto_id;
 END;
 $$;

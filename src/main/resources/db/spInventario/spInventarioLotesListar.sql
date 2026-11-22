@@ -21,6 +21,7 @@ RETURNS TABLE (
     descripcion_lote VARCHAR,
     costo_unitario DECIMAL(8,2),
     fecha_vencimiento DATE,
+    proveedor_id INT,
     nombre_proveedor VARCHAR,
     dias_para_vencer INT,
     marca_baja BOOLEAN,
@@ -48,6 +49,7 @@ BEGIN
         l.descripcion AS descripcion_lote,
         l.costo_unitario,
         l.fecha_vencimiento,
+        l.proveedor_id,
         COALESCE(pr.nombre_empresa, 'Compra Directa')::VARCHAR AS nombre_proveedor,
         CASE
             WHEN l.fecha_vencimiento IS NOT NULL THEN (l.fecha_vencimiento - CURRENT_DATE)::INT

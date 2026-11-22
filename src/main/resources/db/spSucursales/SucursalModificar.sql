@@ -2,6 +2,9 @@
 -- AUTOR:           Ronald Narvaez Estevez
 -- DESCRIPCION:     MODIFICAR DATOS DE UNA SUCURSAL EXISTENTE
 -- ============================================================================================
+DROP PROCEDURE IF EXISTS sp_sucursales_modificar;
+DROP PROCEDURE IF EXISTS sp_sucursales_modificar(INT, VARCHAR, VARCHAR, VARCHAR, VARCHAR, INT);
+
 CREATE OR REPLACE PROCEDURE sp_sucursales_modificar(
     p_sucursal_id INT,
     p_codigo_interno VARCHAR,

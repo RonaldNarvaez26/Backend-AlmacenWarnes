@@ -70,6 +70,10 @@ public class InventarioLoteDTO {
     @JsonProperty("fechaVencimiento")
     private LocalDate fechaVencimiento;
 
+    @Schema(description = "Identificador del proveedor abastecedor", example = "1")
+    @JsonProperty("proveedorId")
+    private Integer proveedorId;
+
     @Schema(description = "Nombre de la empresa distribuidora abastecedora", example = "PIL Andina S.A.")
     @JsonProperty("nombreProveedor")
     private String nombreProveedor;
@@ -112,6 +116,11 @@ public class InventarioLoteDTO {
     @JsonProperty("marca_baja")
     public Boolean getMarca_baja() {
         return marcaBaja;
+    }
+
+    @JsonProperty("proveedor_id")
+    public Integer getProveedor_id() {
+        return proveedorId;
     }
 
     @JsonProperty("inventario_id")

@@ -525,4 +525,23 @@ public class InventarioController {
                 log.info("Estado de categoría código {} actualizado exitosamente", codigo);
                 return ResponseEntity.ok(dto);
         }
+
+        @Operation(summary = "Consultar trazabilidad y kardex de movimientos de inventario", description = "Ejecuta la función PostgreSQL `fn_historial_inventario_listar(p_sucursal_id, p_producto_id, p_tipo_movimiento)`. Retorna el registro cronológico completo de entradas, salidas y ajustes de stock.")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Listado de movimientos de inventario recuperado exitosamente", content = @Content(schema = @Schema(implementation = HistorialInventarioDTO.class)))
+        })
+        @GetMapping("/historial")
+        public ResponseEntity<List<HistorialInventarioDTO>> listarHistorial(
+                        @RequestParam(name = "sucursalId", required = false) Integer sucursalId,
+                        @RequestParam(name = "productoId", required = false) Integer productoId,
+                        @RequestParam(name = "tipoMovimiento", required = false) Integer tipoMovimiento,
+                        @RequestParam(name = "usuarioId", required = false) Integer usuarioId,
+                        @RequestHeader(name = "Authorization", required = false) String authHeader) {
+                Integer sucursalFinal = securityContextHelper.resolverSucursalFiltro(sucursalId, usuarioId, authHeader);
+                log.info("Consultando historial de inventario (Kardex) - sucursalId: {}, productoId: {}, tipoMovimiento: {}",
+                                sucursalFinal, productoId, tipoMovimiento);
+                List<HistorialInventarioDTO> lista = inventarioService.listarHistorial(sucursalFinal, productoId, tipoMovimiento);
+                log.info("Historial de inventario retornado con {} movimientos", lista.size());
+                return ResponseEntity.ok(lista);
+        }
 }

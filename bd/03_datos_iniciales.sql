@@ -2,30 +2,12 @@
 -- SCRIPT CONSOLIDADO DE DATOS INICIALES (SEED DATA) - ALMACEN WARNES
 -- Archivo: 03_datos_iniciales.sql
 -- Motor: PostgreSQL 14+ / Spring Boot 3+ (Bcrypt JWT)
--- Descripción: Limpieza total de tablas, datos paramétricos completos (Conceptos 1 al 8),
---              Sucursales, 6 Usuarios de prueba con password '123456', Proveedores abundantes,
---              Catálogo de 15 productos, 20 Lotes, 20 Existencias en Inventario,
---              Sala de Espera (4 pendientes) y sincronización de secuencias.
+-- Descripción: Limpieza total de tablas, datos paramétricos completos (Conceptos 1 al 9),
+--              Sucursales, Clientes, 6 Usuarios de prueba con password '123456', Proveedores,
+--              Catálogo de 16 productos, 20 Lotes, 20 Existencias en Inventario,
+--              Sala de Espera (12 pendientes), 2 Ventas y 3 Detalles de Venta,
+--              Historial de Inventario (Kardex inicial) y sincronización de secuencias.
 -- ============================================================================
-
--- ============================================================================
--- PARCHE PREVIO: Asegurar columnas de auditoría y relaciones en tablas clave
--- ============================================================================
-ALTER TABLE sucursales ADD COLUMN IF NOT EXISTS fecha_modificacion TIMESTAMP WITHOUT TIME ZONE NULL;
-ALTER TABLE sucursales ADD COLUMN IF NOT EXISTS usuario_modificacion INTEGER NULL;
-
-ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS sucursal_id INTEGER NULL REFERENCES sucursales(sucursal_id);
-ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS estado INTEGER NOT NULL DEFAULT 1;
-
-ALTER TABLE proveedores ADD COLUMN IF NOT EXISTS sucursal_id INTEGER NULL REFERENCES sucursales(sucursal_id);
-
-ALTER TABLE inventario_pendientes
-ADD COLUMN IF NOT EXISTS proveedor_id INTEGER NULL REFERENCES proveedores(proveedor_id),
-ADD COLUMN IF NOT EXISTS descripcion_lote VARCHAR(150) NULL,
-ADD COLUMN IF NOT EXISTS fecha_vencimiento DATE NULL,
-ADD COLUMN IF NOT EXISTS observacion_revision VARCHAR(250) NULL,
-ADD COLUMN IF NOT EXISTS fecha_subsanacion TIMESTAMP WITHOUT TIME ZONE NULL;
-
 -- ============================================================================
 -- 1. LIMPIEZA TOTAL DE TABLAS (WIPE OUT CON TRUNCATE CASCADE)
 -- ============================================================================
@@ -37,6 +19,8 @@ TRUNCATE TABLE
     movimientos,
     reportes,
     sesiones,
+    historial_inventario,
+    notificaciones,
     inventario_pendientes,
     inventario,
     lotes,
@@ -95,7 +79,7 @@ INSERT INTO conceptos (concepto_id, grupo_id, codigo, descripcion, marca_baja, f
 (23, 5, 3, 'Anulada',              FALSE, CURRENT_TIMESTAMP, 1),
 
 -- Grupo 6: Tipos de Movimientos
-(24, 6, 0, 'Tipos de Movimientos', FALSE, CURRENT_TIMESTAMP, 1),
+(24, 6, 0, 'Tipo de Movimientos', FALSE, CURRENT_TIMESTAMP, 1),
 (25, 6, 1, 'Entrada',              FALSE, CURRENT_TIMESTAMP, 1),
 (26, 6, 2, 'Salida',               FALSE, CURRENT_TIMESTAMP, 1),
 
@@ -110,7 +94,34 @@ INSERT INTO conceptos (concepto_id, grupo_id, codigo, descripcion, marca_baja, f
 (32, 8, 0, 'Estado Cuenta Usuario', FALSE, CURRENT_TIMESTAMP, 1),
 (33, 8, 1, 'Activo',                 FALSE, CURRENT_TIMESTAMP, 1),
 (34, 8, 2, 'Solicita Recuperación',  FALSE, CURRENT_TIMESTAMP, 1),
-(35, 8, 3, 'Bloqueado',              FALSE, CURRENT_TIMESTAMP, 1);
+(35, 8, 3, 'Bloqueado',              FALSE, CURRENT_TIMESTAMP, 1),
+
+-- Grupo 9: Tipo Movimiento Inventario (Kardex)
+(36, 9, 0, 'Tipo Movimiento Inventario', FALSE, CURRENT_TIMESTAMP, 1),
+(37, 9, 1, 'Ingreso',                   FALSE, CURRENT_TIMESTAMP, 1),
+(38, 9, 2, 'Egreso',                    FALSE, CURRENT_TIMESTAMP, 1),
+(39, 9, 3, 'Ajuste',                    FALSE, CURRENT_TIMESTAMP, 1),
+
+-- Grupo 10: Tipos de Notificación y Alertas Internas
+(40, 10, 0, 'Tipos de Notificación',                 FALSE, CURRENT_TIMESTAMP, 1),
+(41, 10, 1, 'Stock Agotado',                         FALSE, CURRENT_TIMESTAMP, 1),
+(42, 10, 2, 'Stock Bajo',                            FALSE, CURRENT_TIMESTAMP, 1),
+(43, 10, 3, 'Sala de Espera (Ingreso Pendiente)',    FALSE, CURRENT_TIMESTAMP, 1),
+(44, 10, 4, 'Sala de Espera (Mercadería Observada)', FALSE, CURRENT_TIMESTAMP, 1),
+(45, 10, 5, 'Solicitud de Acceso a Dashboard',       FALSE, CURRENT_TIMESTAMP, 1),
+(46, 10, 6, 'Acceso a Dashboard Autorizado',         FALSE, CURRENT_TIMESTAMP, 1),
+(47, 10, 7, 'Recuperación de Contraseña',            FALSE, CURRENT_TIMESTAMP, 1),
+(48, 10, 8, 'Usuario Bloqueado',                     FALSE, CURRENT_TIMESTAMP, 1),
+(49, 10, 9, 'Lote Próximo a Vencer',                 FALSE, CURRENT_TIMESTAMP, 1),
+(50, 10, 10, 'Lote Vencido',                         FALSE, CURRENT_TIMESTAMP, 1),
+
+-- Grupo 11: Umbrales de Alerta de Vencimiento por Categoría (en días)
+(51, 11, 0, 'Umbral Días Alerta Vencimiento por Categoría', FALSE, CURRENT_TIMESTAMP, 1),
+(52, 11, 1, '15', FALSE, CURRENT_TIMESTAMP, 1),
+(53, 11, 2, '30', FALSE, CURRENT_TIMESTAMP, 1),
+(54, 11, 3, '45', FALSE, CURRENT_TIMESTAMP, 1),
+(55, 11, 4, '30', FALSE, CURRENT_TIMESTAMP, 1),
+(56, 11, 5, '60', FALSE, CURRENT_TIMESTAMP, 1);
 
 -- ============================================================================
 -- 3. SUCURSALES (TABLA: SUCURSALES)
@@ -138,8 +149,8 @@ INSERT INTO usuarios (
     password, marca_baja, fecha_creacion, usuario_creacion
 ) VALUES
 -- 2 Propietarios (rol_id = 3, sucursal_id = NULL para visión global)
-(1, NULL, 'kenneth.admin',     'Kenneth Gabriel', 'Lopez Castillo',  3, 1, '$2a$10$8ZGJ5gZH2Nbjhk3tEbs56OYzWwjFrYYgvAukd3NgBnxUNCmZYsIIW', FALSE, CURRENT_TIMESTAMP, 1),
-(2, NULL, 'ronald.admin',      'Ronald',          'Narvaez Alvarez', 3, 1, '$2a$10$8ZGJ5gZH2Nbjhk3tEbs56OYzWwjFrYYgvAukd3NgBnxUNCmZYsIIW', FALSE, CURRENT_TIMESTAMP, 1),
+(1, 0, 'kenneth.admin',     'Kenneth Gabriel', 'Lopez Castillo',  3, 1, '$2a$10$8ZGJ5gZH2Nbjhk3tEbs56OYzWwjFrYYgvAukd3NgBnxUNCmZYsIIW', FALSE, CURRENT_TIMESTAMP, 1),
+(2, 0, 'ronald.admin',      'Ronald',          'Narvaez Alvarez', 3, 1, '$2a$10$8ZGJ5gZH2Nbjhk3tEbs56OYzWwjFrYYgvAukd3NgBnxUNCmZYsIIW', FALSE, CURRENT_TIMESTAMP, 1),
 
 -- 2 Supervisores (rol_id = 2, aislados por sucursal)
 (3, 1, 'carlos.supervisor', 'Carlos Eduardo',  'Mendoza Quispe',  2, 1, '$2a$10$8ZGJ5gZH2Nbjhk3tEbs56OYzWwjFrYYgvAukd3NgBnxUNCmZYsIIW', FALSE, CURRENT_TIMESTAMP, 1),
@@ -235,7 +246,7 @@ INSERT INTO lotes (
 
 -- Producto 5: Coca-Cola 2L (2 lotes: normal y bonificacion)
 (7,  2, 'Lote Coca-Cola 2L Cajas Preventa',               50, 425.00, 8.50, CURRENT_DATE + INTERVAL '120 days', FALSE, CURRENT_TIMESTAMP, 3),
-(8,  2, 'Lote Coca-Cola 2L Bonificacion Extra',           15, 120.00, 8.00, CURRENT_DATE + INTERVAL '95 days',  FALSE, CURRENT_TIMESTAMP, 3),
+(8,  2, 'Lote Coca-Cola 2L Bonificacion Extra',           15, 120.00, 8.00, CURRENT_DATE + INTERVAL '18 days',  FALSE, CURRENT_TIMESTAMP, 3),
 
 -- Producto 6: Sprite 2L
 (9,  2, 'Lote Sprite 2L Cajas Preventa',                  30, 255.00, 8.50, CURRENT_DATE + INTERVAL '120 days', FALSE, CURRENT_TIMESTAMP, 3),
@@ -245,7 +256,7 @@ INSERT INTO lotes (
 (11, 2, 'Lote Agua Vital 2L Emergencia Reserva',          20, 90.00,  4.50, CURRENT_DATE + INTERVAL '210 days', FALSE, CURRENT_TIMESTAMP, 3),
 
 -- Producto 8: Malta Maltin
-(12, 3, 'Lote Maltin 330ml Sixpacks',                     48, 192.00, 4.00, CURRENT_DATE + INTERVAL '90 days',  FALSE, CURRENT_TIMESTAMP, 3),
+(12, 3, 'Lote Maltin 330ml Sixpacks',                     48, 192.00, 4.00, CURRENT_DATE - INTERVAL '2 days',   FALSE, CURRENT_TIMESTAMP, 3),
 
 -- Producto 9: Cafe Nescafe
 (13, 8, 'Lote Nescafe Tradicion Lata 200g',               15, 360.00, 24.00,CURRENT_DATE + INTERVAL '300 days', FALSE, CURRENT_TIMESTAMP, 3),
@@ -258,7 +269,7 @@ INSERT INTO lotes (
 
 -- Producto 12 y 13: Galletas Mabel's
 (16, 5, 'Lote Galletas Wafer Mabel''s',                   60, 192.00, 3.20, CURRENT_DATE + INTERVAL '110 days', FALSE, CURRENT_TIMESTAMP, 3),
-(17, 5, 'Lote Galletas Cremositas Mabel''s',               50, 140.00, 2.80, CURRENT_DATE + INTERVAL '100 days', FALSE, CURRENT_TIMESTAMP, 3),
+(17, 5, 'Lote Galletas Cremositas Mabel''s',               50, 140.00, 2.80, CURRENT_DATE + INTERVAL '12 days',  FALSE, CURRENT_TIMESTAMP, 3),
 
 -- Producto 14: Chocolate Sublime (Dado de baja logica para restauracion)
 (18, 8, 'Lote Chocolate Sublime Descontinuado',           20, 70.00,  3.50, CURRENT_DATE + INTERVAL '15 days',  TRUE,  CURRENT_TIMESTAMP, 3),
@@ -429,180 +440,68 @@ INSERT INTO detalles_ventas (detalle_venta_id, producto_id, venta_id, inventario
 (3, 9, 2, 13, 30.00, 1.00, FALSE);-- 1 Cafe Nescafe = 30.00 (Total Venta 2 = 30.00)
 
 -- ============================================================================
--- 12. SINCRONIZACION AUTOMATICA DE TODAS LAS SECUENCIAS
--- Sincroniza cada secuencia serial al valor maximo actual usando setval()
--- Si la tabla tiene registros: setval(seq, MAX(id), true) -> el siguiente nextval da MAX(id) + 1
--- Si la tabla esta vacia:     setval(seq, 1, false)       -> el siguiente nextval da 1
+-- 12. HISTORIAL DE INVENTARIO (KARDEX INICIAL)
+-- Registro estático del movimiento inicial de apertura para cada existencia física
 -- ============================================================================
-DO $$
-DECLARE
-    t RECORD;
-    v_max BIGINT;
-    v_seq TEXT;
-BEGIN
-    FOR t IN
-        SELECT * FROM (VALUES
-            ('conceptos',             'concepto_id'),
-            ('sucursales',            'sucursal_id'),
-            ('usuarios',              'usuario_id'),
-            ('proveedores',           'proveedor_id'),
-            ('productos',             'producto_id'),
-            ('lotes',                 'lote_id'),
-            ('inventario',            'inventario_id'),
-            ('inventario_pendientes', 'inventario_pendiente_id'),
-            ('clientes',              'cliente_id'),
-            ('ventas',                'venta_id'),
-            ('detalles_ventas',       'detalle_venta_id'),
-            ('reportes',              'reporte_id'),
-            ('movimientos',           'movimiento_id'),
-            ('entradas',              'entrada_id'),
-            ('salidas',               'salida_id'),
-            ('sesiones',              'sesion_id')
-        ) AS tbl(table_name, column_name)
-    LOOP
-        v_seq := pg_get_serial_sequence(t.table_name, t.column_name);
-        IF v_seq IS NOT NULL THEN
-            EXECUTE format('SELECT MAX(%I) FROM %I', t.column_name, t.table_name) INTO v_max;
-            IF v_max IS NOT NULL THEN
-                PERFORM setval(v_seq, v_max, true);
-                RAISE NOTICE 'Secuencia % sincronizada en % (is_called = true)', v_seq, v_max;
-            ELSE
-                PERFORM setval(v_seq, 1, false);
-                RAISE NOTICE 'Secuencia % sincronizada en 1 (is_called = false)', v_seq;
-            END IF;
-        ELSE
-            v_seq := t.table_name || '_' || t.column_name || '_seq';
-            IF EXISTS (SELECT 1 FROM pg_class WHERE relkind = 'S' AND relname = v_seq) THEN
-                EXECUTE format('SELECT MAX(%I) FROM %I', t.column_name, t.table_name) INTO v_max;
-                IF v_max IS NOT NULL THEN
-                    PERFORM setval(v_seq, v_max, true);
-                    RAISE NOTICE 'Secuencia (fallback) % sincronizada en % (is_called = true)', v_seq, v_max;
-                ELSE
-                    PERFORM setval(v_seq, 1, false);
-                    RAISE NOTICE 'Secuencia (fallback) % sincronizada en 1 (is_called = false)', v_seq;
-                END IF;
-            ELSE
-                RAISE NOTICE 'No se encontro secuencia para %.%', t.table_name, t.column_name;
-            END IF;
-        END IF;
-    END LOOP;
-END $$;
+INSERT INTO Historial_Inventario (
+    historial_id, sucursal_id, producto_id, tipo_movimiento,
+    stock_anterior, stock_resultante,
+    descripcion, marca_baja, fecha_creacion,
+    usuario_creacion, usuario_autorizacion
+) VALUES
+-- SUCURSAL 1 (Warnes Central - SUC-001) - Supervisor Carlos Mendoza (ID=3)
+(1,  1, 1,  1, 0,  18, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+(2,  1, 1,  1, 18, 78, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+(3,  1, 2,  1, 0,  25, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+(4,  1, 3,  1, 0,  12, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+(5,  1, 3,  1, 12, 52, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+(6,  1, 4,  1, 0,  15, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+(7,  1, 5,  1, 0,  45, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+(8,  1, 5,  1, 45, 60, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+(9,  1, 6,  1, 0,  28, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+(10, 1, 7,  1, 0,  38, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+(11, 1, 7,  1, 38, 58, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+(12, 1, 8,  1, 0,  42, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 3, 3),
+
+-- SUCURSAL 2 (Warnes Norte - SUC-002) - Supervisora Patricia Benitez (ID=4)
+(13, 2, 9,  1, 0, 14, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 4, 4),
+(14, 2, 10, 1, 0, 32, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 4, 4),
+(15, 2, 11, 1, 0, 26, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 4, 4),
+(16, 2, 12, 1, 0, 55, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 4, 4),
+(17, 2, 13, 1, 0, 45, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 4, 4),
+(18, 2, 15, 1, 0, 22, 'Stock inicial de apertura de almacén', FALSE, CURRENT_TIMESTAMP, 4, 4);
 
 -- ============================================================================
--- 13. FUNCIONES Y PROCEDIMIENTOS DEL MODULO DE USUARIOS Y SEGURIDAD
--- Asegura que fn_usuarios_listar, sp_usuarios_insertar, etc. existan y funcionen
+-- 13. NOTIFICACIONES INICIALES (TABLA: NOTIFICACIONES)
 -- ============================================================================
-CREATE OR REPLACE FUNCTION fn_usuarios_listar(
-    p_mostrar_bajas BOOLEAN DEFAULT FALSE,
-    p_rol_id INTEGER DEFAULT NULL,
-    p_sucursal_id INTEGER DEFAULT NULL,
-    p_texto VARCHAR DEFAULT NULL
-)
-RETURNS TABLE (
-    usuario_id INT,
-    sucursal_id INT,
-    usuario VARCHAR,
-    nombres VARCHAR,
-    apellidos VARCHAR,
-    rol_id INT,
-    descripcion_rol VARCHAR,
-    estado INT,
-    fecha_creacion TIMESTAMP
-) AS $$
-BEGIN
-    RETURN QUERY
-    SELECT 
-        u.usuario_id,
-        u.sucursal_id,
-        u.usuario,
-        u.nombres,
-        u.apellidos,
-        u.rol_id,
-        COALESCE(c.descripcion, 'Sin Rol')::VARCHAR AS descripcion_rol,
-        u.estado,
-        u.fecha_creacion
-    FROM usuarios u
-    LEFT JOIN conceptos c ON c.grupo_id = 1 AND c.codigo = u.rol_id AND c.marca_baja = FALSE
-    WHERE (p_mostrar_bajas = TRUE OR u.marca_baja = FALSE)
-      AND (p_rol_id IS NULL OR u.rol_id = p_rol_id)
-      AND (p_sucursal_id IS NULL OR u.sucursal_id = p_sucursal_id)
-      AND (p_texto IS NULL OR TRIM(p_texto) = '' OR 
-           u.usuario ILIKE '%' || p_texto || '%' OR 
-           u.nombres ILIKE '%' || p_texto || '%' OR 
-           u.apellidos ILIKE '%' || p_texto || '%')
-    ORDER BY u.usuario_id ASC;
-END;
-$$ LANGUAGE plpgsql;
+INSERT INTO Notificaciones (
+    usuario_destino, rol_destino, tipo_notificacion,
+    titulo_alerta, mensaje_alerta, direccion,
+    leido, fecha_emision, fecha_leido
+) VALUES
+(5, 1, 4, 'Mercadería Observada para Corrección', 'El lote de Malta Maltin Clasica 330ml en SUC-001 fue observado: Costo unitario declarado no coincide con el acuerdo oficial.', '/inventario?tab=pendientes', FALSE, CURRENT_TIMESTAMP, NULL),
+(NULL, 2, 3, 'Ingreso Pendiente en Sala de Espera', 'Existen 5 lotes pendientes de autorización en SUC-001.', '/inventario?tab=pendientes', FALSE, CURRENT_TIMESTAMP, NULL),
+(NULL, 3, 3, 'Ingreso Pendiente en Sala de Espera', 'Existen 9 lotes pendientes de autorización a nivel global.', '/inventario?tab=pendientes', FALSE, CURRENT_TIMESTAMP, NULL),
+(NULL, 3, 7, 'Solicitud de Restablecimiento de Contraseña', 'El usuario pedro.cajero2 (@pedro.cajero2) ha solicitado el restablecimiento de su contraseña de acceso.', '/admin/usuarios', FALSE, CURRENT_TIMESTAMP, NULL);
 
-CREATE OR REPLACE PROCEDURE sp_usuarios_insertar(
-    IN p_usuario VARCHAR,
-    IN p_sucursal_id INT,
-    IN p_nombres VARCHAR,
-    IN p_apellidos VARCHAR,
-    IN p_rol_id INT,
-    IN p_password VARCHAR,
-    IN p_usuario_creacion INT,
-    OUT p_usuario_id INT
-)
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    INSERT INTO usuarios (
-        usuario, sucursal_id, nombres, apellidos, rol_id, password, 
-        estado, marca_baja, fecha_creacion, usuario_creacion
-    ) VALUES (
-        p_usuario, p_sucursal_id, p_nombres, p_apellidos, p_rol_id, p_password, 
-        1, FALSE, CURRENT_TIMESTAMP, p_usuario_creacion
-    ) RETURNING usuarios.usuario_id INTO p_usuario_id;
-END;
-$$;
-
-CREATE OR REPLACE PROCEDURE sp_usuarios_modificar(
-    IN p_usuario_id INT,
-    IN p_sucursal_id INT,
-    IN p_nombres VARCHAR,
-    IN p_apellidos VARCHAR,
-    IN p_rol_id INT,
-    IN p_usuario_modificacion INT
-)
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    UPDATE usuarios
-    SET sucursal_id = p_sucursal_id,
-        nombres = p_nombres,
-        apellidos = p_apellidos,
-        rol_id = p_rol_id,
-        fecha_modificacion = CURRENT_TIMESTAMP,
-        usuario_modificacion = p_usuario_modificacion
-    WHERE usuario_id = p_usuario_id;
-END;
-$$;
-
-CREATE OR REPLACE PROCEDURE sp_usuarios_eliminar(
-    IN p_usuario_id INT,
-    IN p_usuario_modificacion INT
-)
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    UPDATE usuarios
-    SET marca_baja = TRUE,
-        fecha_modificacion = CURRENT_TIMESTAMP,
-        usuario_modificacion = p_usuario_modificacion
-    WHERE usuario_id = p_usuario_id;
-END;
-$$;
-
-CREATE OR REPLACE PROCEDURE sp_usuarios_solicitar_recuperacion(
-    IN p_usuario VARCHAR
-)
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    UPDATE usuarios
-    SET estado = 2,
-        fecha_modificacion = CURRENT_TIMESTAMP
-    WHERE usuario = p_usuario AND marca_baja = FALSE;
-END;
-$$;
+-- ============================================================================
+-- 14. SINCRONIZACION DE SECUENCIAS
+-- ============================================================================
+SELECT setval('conceptos_concepto_id_seq', (SELECT MAX(concepto_id) FROM conceptos));
+SELECT setval('sucursales_sucursal_id_seq', (SELECT MAX(sucursal_id) FROM sucursales));
+SELECT setval('usuarios_usuario_id_seq', (SELECT MAX(usuario_id) FROM usuarios));
+SELECT setval('proveedores_proveedor_id_seq', (SELECT MAX(proveedor_id) FROM proveedores));
+SELECT setval('productos_producto_id_seq', (SELECT MAX(producto_id) FROM productos));
+SELECT setval('lotes_lote_id_seq', (SELECT MAX(lote_id) FROM lotes));
+SELECT setval('inventario_inventario_id_seq', (SELECT MAX(inventario_id) FROM inventario));
+SELECT setval('inventario_pendientes_inventario_pendiente_id_seq', (SELECT MAX(inventario_pendiente_id) FROM inventario_pendientes));
+SELECT setval('clientes_cliente_id_seq', (SELECT MAX(cliente_id) FROM clientes));
+SELECT setval('ventas_venta_id_seq', (SELECT MAX(venta_id) FROM ventas));
+SELECT setval('detalles_ventas_detalle_venta_id_seq', (SELECT MAX(detalle_venta_id) FROM detalles_ventas));
+SELECT setval('historial_inventario_historial_id_seq', (SELECT MAX(historial_id) FROM historial_inventario));
+SELECT setval('notificaciones_id_notificacion_seq', COALESCE((SELECT MAX(id_notificacion) FROM notificaciones), 1), (SELECT COUNT(*) > 0 FROM notificaciones));
+SELECT setval('reportes_reporte_id_seq', 1, false);
+SELECT setval('movimientos_movimiento_id_seq', 1, false);
+SELECT setval('entradas_entrada_id_seq', 1, false);
+SELECT setval('salidas_salida_id_seq', 1, false);
+SELECT setval('sesiones_sesion_id_seq', 1, false);

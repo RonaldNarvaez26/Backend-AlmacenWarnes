@@ -2,6 +2,7 @@ package com.almacen.warnes.modulo_inventario.mapper;
 
 import com.almacen.warnes.modulo_conceptos.dto.ConceptoDTO;
 import com.almacen.warnes.modulo_inventario.dto.*;
+import com.almacen.warnes.modulo_inventario.dto.projection.HistorialInventarioProjection;
 import com.almacen.warnes.modulo_inventario.dto.projection.InventarioKpiProjection;
 import com.almacen.warnes.modulo_inventario.dto.projection.InventarioLoteProjection;
 import com.almacen.warnes.modulo_inventario.dto.projection.ProductoCatalogoProjection;
@@ -45,6 +46,7 @@ public class InventarioMapper {
                 .descripcionLote(projection.getDescripcion_lote())
                 .costoUnitario(projection.getCosto_unitario())
                 .fechaVencimiento(projection.getFecha_vencimiento())
+                .proveedorId(projection.getProveedor_id())
                 .nombreProveedor(projection.getNombre_proveedor())
                 .diasParaVencer(projection.getDias_para_vencer())
                 .marcaBaja(projection.getMarca_baja())
@@ -155,6 +157,35 @@ public class InventarioMapper {
                 .nombreCategoria(dto.getDescripcion())
                 .descripcion(dto.getDescripcion())
                 .marcaBaja(false)
+                .build();
+    }
+
+    public HistorialInventarioDTO toHistorialDTO(HistorialInventarioProjection projection) {
+        if (projection == null) {
+            return null;
+        }
+        return HistorialInventarioDTO.builder()
+                .historialId(projection.getHistorial_id())
+                .sucursalId(projection.getSucursal_id())
+                .codigoSucursal(projection.getCodigo_sucursal())
+                .ciudadSucursal(projection.getCiudad_sucursal())
+                .productoId(projection.getProducto_id())
+                .codigoInterno(projection.getCodigo_interno())
+                .codigoBarras(projection.getCodigo_barras())
+                .nombreProducto(projection.getNombre_producto())
+                .loteId(projection.getLote_id())
+                .descripcionLote(projection.getDescripcion_lote())
+                .tipoMovimiento(projection.getTipo_movimiento())
+                .nombreTipoMovimiento(projection.getNombre_tipo_movimiento())
+                .stockAnterior(projection.getStock_anterior())
+                .cantidad(projection.getCantidad())
+                .stockResultante(projection.getStock_resultante())
+                .descripcion(projection.getDescripcion())
+                .fechaCreacion(projection.getFecha_creacion())
+                .usuarioCreacion(projection.getUsuario_creacion())
+                .nombreUsuarioCreacion(projection.getNombre_usuario_creacion())
+                .usuarioAutorizacion(projection.getUsuario_autorizacion())
+                .nombreUsuarioAutorizacion(projection.getNombre_usuario_autorizacion())
                 .build();
     }
 }

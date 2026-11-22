@@ -18,6 +18,7 @@ public interface InventarioLoteProjection {
     String getDescripcion_lote();
     BigDecimal getCosto_unitario();
     LocalDate getFecha_vencimiento();
+    Integer getProveedor_id();
     String getNombre_proveedor();
     Integer getDias_para_vencer();
     Boolean getMarca_baja();
