@@ -63,7 +63,7 @@ BEGIN
            ON u.sucursal_id = suc.sucursal_id AND suc.marca_baja = false
     LEFT JOIN Reportes r
            ON r.usuario_creacion = s.usuario_id
-          AND r.fecha_inicio = s.hora_sesion_abierta
+          AND (r.fecha_inicio = s.hora_sesion_abierta OR date_trunc('second', r.fecha_inicio) = date_trunc('second', s.hora_sesion_abierta))
           AND r.marca_baja = false
     LEFT JOIN LATERAL (
         SELECT (

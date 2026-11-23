@@ -107,15 +107,16 @@ public class ReporteRepository {
             LocalDate fechaHasta,
             Integer usuarioId
     ) {
-        String sql = "SELECT reporte_id, sucursal_id, codigo_sucursal, periodo, fecha_inicio, fecha_fin, " +
+        String sql = "SELECT reporte_id, sucursal_id, codigo_sucursal, nombre_sucursal, periodo, fecha_inicio, fecha_fin, " +
                 "monto_base, monto_entradas, monto_salidas, utilidad, datos_snapshot, usuario_creacion, " +
                 "nombre_usuario, fecha_creacion " +
-                "FROM fn_reportes_listar(?, ?, ?, ?, ?)";
+                "FROM fn_reportes_listar(CAST(? AS INT), CAST(? AS VARCHAR), CAST(? AS DATE), CAST(? AS DATE), CAST(? AS INT))";
 
         return jdbcTemplate.query(sql, (rs, rowNum) -> ReporteListadoDTO.builder()
                 .reporteId(rs.getInt("reporte_id"))
                 .sucursalId(rs.getInt("sucursal_id"))
                 .codigoSucursal(rs.getString("codigo_sucursal"))
+                .nombreSucursal(rs.getString("nombre_sucursal"))
                 .periodo(rs.getString("periodo"))
                 .fechaInicio(rs.getTimestamp("fecha_inicio") != null
                         ? rs.getTimestamp("fecha_inicio").toLocalDateTime()
@@ -146,7 +147,7 @@ public class ReporteRepository {
      * Obtiene el detalle auditado completo de un reporte mediante fn_reportes_obtener_detalle.
      */
     public Optional<ReporteDetalleDTO> obtenerDetalleReporte(Integer reporteId) {
-        String sql = "SELECT reporte_id, sucursal_id, codigo_sucursal, periodo, fecha_inicio, fecha_fin, " +
+        String sql = "SELECT reporte_id, sucursal_id, codigo_sucursal, nombre_sucursal, periodo, fecha_inicio, fecha_fin, " +
                 "monto_base, monto_entradas, monto_salidas, utilidad, datos_snapshot, nombre_usuario, " +
                 "fecha_creacion, entradas, salidas, movimientos " +
                 "FROM fn_reportes_obtener_detalle(?)";
@@ -155,6 +156,7 @@ public class ReporteRepository {
                 .reporteId(rs.getInt("reporte_id"))
                 .sucursalId(rs.getInt("sucursal_id"))
                 .codigoSucursal(rs.getString("codigo_sucursal"))
+                .nombreSucursal(rs.getString("nombre_sucursal"))
                 .periodo(rs.getString("periodo"))
                 .fechaInicio(rs.getTimestamp("fecha_inicio") != null
                         ? rs.getTimestamp("fecha_inicio").toLocalDateTime()

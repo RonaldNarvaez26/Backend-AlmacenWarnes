@@ -1,3 +1,10 @@
+-- ============================================================================================
+-- AUTOR:           Ronald Narvaez Estevez
+-- DESCRIPCION:     LISTAR REPORTES DE ARQUEO / CIERRES HISTORICOS (LIBRO MAYOR)
+-- ============================================================================================
+
+DROP FUNCTION IF EXISTS fn_reportes_listar(integer, character varying, date, date, integer);
+
 CREATE OR REPLACE FUNCTION fn_reportes_listar(
     p_sucursal_id INT DEFAULT NULL,
     p_periodo VARCHAR DEFAULT NULL,
@@ -9,6 +16,7 @@ RETURNS TABLE (
     reporte_id INT,
     sucursal_id INT,
     codigo_sucursal VARCHAR,
+    nombre_sucursal VARCHAR,
     periodo VARCHAR,
     fecha_inicio TIMESTAMP,
     fecha_fin TIMESTAMP,
@@ -29,9 +37,10 @@ BEGIN
         r.reporte_id,
         r.sucursal_id,
         s.codigo_interno::VARCHAR AS codigo_sucursal,
+        s.ciudad::VARCHAR AS nombre_sucursal,
         r.periodo::VARCHAR,
-        r.fecha_inicio,
-        r.fecha_fin,
+        r.fecha_inicio::TIMESTAMP AS fecha_inicio,
+        r.fecha_fin::TIMESTAMP AS fecha_fin,
         r.monto_base,
         r.monto_entradas,
         r.monto_salidas,

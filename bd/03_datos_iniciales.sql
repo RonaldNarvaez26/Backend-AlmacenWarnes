@@ -9,6 +9,32 @@
 --              Historial de Inventario (Kardex inicial) y sincronización de secuencias.
 -- ============================================================================
 -- ============================================================================
+-- PARCHE PREVIO: Asegurar columnas de auditoría y relaciones en tablas clave
+-- ============================================================================
+ALTER TABLE sucursales ADD COLUMN IF NOT EXISTS fecha_modificacion TIMESTAMP WITHOUT TIME ZONE NULL;
+ALTER TABLE sucursales ADD COLUMN IF NOT EXISTS usuario_modificacion INTEGER NULL;
+
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS sucursal_id INTEGER NULL REFERENCES sucursales(sucursal_id);
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS estado INTEGER NOT NULL DEFAULT 1;
+
+ALTER TABLE proveedores ADD COLUMN IF NOT EXISTS sucursal_id INTEGER NULL REFERENCES sucursales(sucursal_id);
+
+ALTER TABLE movimientos ADD COLUMN IF NOT EXISTS sucursal_id INTEGER NULL REFERENCES sucursales(sucursal_id);
+
+ALTER TABLE sesiones ALTER COLUMN hora_sesion_cerrada DROP NOT NULL;
+ALTER TABLE sesiones ALTER COLUMN duracion_sesion DROP NOT NULL;
+
+ALTER TABLE reportes ALTER COLUMN fecha_inicio TYPE TIMESTAMP WITHOUT TIME ZONE;
+ALTER TABLE reportes ALTER COLUMN fecha_fin TYPE TIMESTAMP WITHOUT TIME ZONE;
+
+ALTER TABLE inventario_pendientes
+ADD COLUMN IF NOT EXISTS proveedor_id INTEGER NULL REFERENCES proveedores(proveedor_id),
+ADD COLUMN IF NOT EXISTS descripcion_lote VARCHAR(150) NULL,
+ADD COLUMN IF NOT EXISTS fecha_vencimiento DATE NULL,
+ADD COLUMN IF NOT EXISTS observacion_revision VARCHAR(250) NULL,
+ADD COLUMN IF NOT EXISTS fecha_subsanacion TIMESTAMP WITHOUT TIME ZONE NULL;
+
+-- ============================================================================
 -- 1. LIMPIEZA TOTAL DE TABLAS (WIPE OUT CON TRUNCATE CASCADE)
 -- ============================================================================
 TRUNCATE TABLE 
@@ -71,6 +97,8 @@ INSERT INTO conceptos (concepto_id, grupo_id, codigo, descripcion, marca_baja, f
 (17, 4, 2, 'QR',              FALSE, CURRENT_TIMESTAMP, 1),
 (18, 4, 3, 'Tarjeta',         FALSE, CURRENT_TIMESTAMP, 1),
 (19, 4, 4, 'Mixto',           FALSE, CURRENT_TIMESTAMP, 1),
+(57, 4, 5, 'Transferencia Bancaria', FALSE, CURRENT_TIMESTAMP, 1),
+(58, 4, 6, 'Otros',                 FALSE, CURRENT_TIMESTAMP, 1),
 
 -- Grupo 5: Estado de las Ventas
 (20, 5, 0, 'Estado de las Ventas', FALSE, CURRENT_TIMESTAMP, 1),
@@ -121,7 +149,34 @@ INSERT INTO conceptos (concepto_id, grupo_id, codigo, descripcion, marca_baja, f
 (53, 11, 2, '30', FALSE, CURRENT_TIMESTAMP, 1),
 (54, 11, 3, '45', FALSE, CURRENT_TIMESTAMP, 1),
 (55, 11, 4, '30', FALSE, CURRENT_TIMESTAMP, 1),
-(56, 11, 5, '60', FALSE, CURRENT_TIMESTAMP, 1);
+(56, 11, 5, '60', FALSE, CURRENT_TIMESTAMP, 1),
+
+-- Grupo 12: Tipos de Entrada
+(59, 12, 0, 'Tipos de Entrada',            FALSE, CURRENT_TIMESTAMP, 1),
+(60, 12, 1, 'Venta Comercial',             FALSE, CURRENT_TIMESTAMP, 1),
+(61, 12, 2, 'Cobro de Deuda / Préstamo',   FALSE, CURRENT_TIMESTAMP, 1),
+(62, 12, 3, 'Aporte de Capital / Fondo',   FALSE, CURRENT_TIMESTAMP, 1),
+(63, 12, 4, 'Ingreso Extraordinario',      FALSE, CURRENT_TIMESTAMP, 1),
+
+-- Grupo 13: Tipos de Salida
+(64, 13, 0, 'Tipos de Salida',             FALSE, CURRENT_TIMESTAMP, 1),
+(65, 13, 1, 'Adelanto / Entrega a Empleado', FALSE, CURRENT_TIMESTAMP, 1),
+(66, 13, 2, 'Pago de Préstamo / Deuda',    FALSE, CURRENT_TIMESTAMP, 1),
+(67, 13, 3, 'Gasto Operativo / Servicios', FALSE, CURRENT_TIMESTAMP, 1),
+(68, 13, 4, 'Pago a Proveedor',            FALSE, CURRENT_TIMESTAMP, 1),
+(69, 13, 5, 'Retiro de Utilidades / Propietario', FALSE, CURRENT_TIMESTAMP, 1),
+(70, 13, 6, 'Egreso Extraordinario',       FALSE, CURRENT_TIMESTAMP, 1),
+
+-- Grupo 14: Categorías de Movimiento Financiero
+(71, 14, 0, 'Categorías de Movimiento Financiero', FALSE, CURRENT_TIMESTAMP, 1),
+(72, 14, 1, 'Venta Comercial',             FALSE, CURRENT_TIMESTAMP, 1),
+(73, 14, 2, 'Préstamo / Deuda',            FALSE, CURRENT_TIMESTAMP, 1),
+(74, 14, 3, 'Adelanto a Empleado',         FALSE, CURRENT_TIMESTAMP, 1),
+(75, 14, 4, 'Gasto Operativo',             FALSE, CURRENT_TIMESTAMP, 1),
+(76, 14, 5, 'Pago a Proveedor',            FALSE, CURRENT_TIMESTAMP, 1),
+(77, 14, 6, 'Aporte de Capital',           FALSE, CURRENT_TIMESTAMP, 1),
+(78, 14, 7, 'Retiro de Propietario',       FALSE, CURRENT_TIMESTAMP, 1),
+(79, 14, 8, 'Otro Extra-Venta',            FALSE, CURRENT_TIMESTAMP, 1);
 
 -- ============================================================================
 -- 3. SUCURSALES (TABLA: SUCURSALES)
@@ -423,21 +478,125 @@ INSERT INTO inventario_pendientes (
  'Rechazado en recepcion fisica: Empaque secundario con botellas abolladas y sin registro sanitario Senasag visible.', NULL);
 
 -- ============================================================================
--- 11. VENTAS Y DETALLES DE VENTAS BASE (TABLAS: VENTAS y DETALLES_VENTAS)
--- Permite que el terminal POS, Arqueo de Caja e Historial de Ventas no queden vacíos
+-- 11.0. SESIONES DE CAJA (TABLA: SESIONES)
+-- Permite registrar turnos laborales de cajeros, auditar horas reales de apertura/cierre,
+-- duración en minutos, y mantener un turno activo listo para operar en la interfaz.
+-- ============================================================================
+INSERT INTO sesiones (
+    sesion_id, usuario_id, hora_sesion_abierta, hora_sesion_cerrada, duracion_sesion, marca_baja
+) VALUES
+-- Sesión 1: Turno anterior cerrado con arqueo de Ana María Flores (ID=5, Warnes Central)
+-- Duración real: 4 horas y 30 minutos (270 minutos)
+(1, 5, CURRENT_TIMESTAMP - INTERVAL '8 hours', CURRENT_TIMESTAMP - INTERVAL '3 hours 30 minutes', 270, FALSE),
+
+-- Sesión 2: Turno activo/abierto de Ana María Flores (ID=5, Warnes Central)
+-- Abierto hace 2 horas, con ventas y movimientos pendientes de arqueo
+(2, 5, CURRENT_TIMESTAMP - INTERVAL '2 hours', NULL, NULL, FALSE),
+
+-- Sesión 3: Turno cerrado con arqueo de Luis Fernando Mamani (ID=6, Warnes Norte)
+-- Duración real: 4 horas (240 minutos)
+(3, 6, CURRENT_TIMESTAMP - INTERVAL '7 hours', CURRENT_TIMESTAMP - INTERVAL '3 hours', 240, FALSE);
+
+-- ============================================================================
+-- 11.1. VENTAS Y DETALLES DE VENTAS BASE (TABLAS: VENTAS y DETALLES_VENTAS)
+-- Permite que el terminal POS, Arqueo de Caja, Libro Mayor e Historial no queden vacíos
 -- ============================================================================
 INSERT INTO ventas (
     venta_id, sucursal_id, estado, precio_total, metodo_venta, 
     cobro_qr, cobro_efectivo, cobro_tarjeta, monto_recibido, cambio, 
     cliente_id, anulado_por, marca_baja, fecha_creacion, usuario_creacion
 ) VALUES
-(1, 1, 2, 24.00, 1, 0.00, 24.00, 0.00, 30.00, 6.00, 2, NULL, FALSE, CURRENT_TIMESTAMP - INTERVAL '4 hours', 5),
-(2, 1, 2, 30.00, 2, 30.00, 0.00, 0.00, 30.00, 0.00, 3, NULL, FALSE, CURRENT_TIMESTAMP - INTERVAL '2 hours', 5);
+-- SUCURSAL 1: Warnes Central - Turno 1 Cerrado de Ana (hace 8h a 3.5h)
+(1, 1, 2, 50.00,  1, 0.00,  50.00,  0.00, 50.00,  0.00, 2, NULL, FALSE, CURRENT_TIMESTAMP - INTERVAL '7 hours 30 minutes', 5),
+(2, 1, 2, 75.00,  2, 75.00,  0.00,  0.00, 75.00,  0.00, 3, NULL, FALSE, CURRENT_TIMESTAMP - INTERVAL '6 hours 45 minutes', 5),
+(3, 1, 2, 100.00, 3, 0.00,   0.00, 100.00, 100.00, 0.00, 2, NULL, FALSE, CURRENT_TIMESTAMP - INTERVAL '5 hours 30 minutes', 5),
+(4, 1, 2, 60.00,  4, 30.00, 30.00,  0.00, 60.00,  0.00, 1, NULL, FALSE, CURRENT_TIMESTAMP - INTERVAL '4 hours 15 minutes', 5),
+(5, 1, 3, 40.00,  1, 0.00,  40.00,  0.00, 40.00,  0.00, 1, 3,    TRUE,  CURRENT_TIMESTAMP - INTERVAL '4 hours', 5),
+
+-- SUCURSAL 2: Warnes Norte - Turno Cerrado de Luis (hace 7h a 3h)
+(6, 2, 2, 80.00,  1, 0.00,  80.00,  0.00, 100.00, 20.00, 2, NULL, FALSE, CURRENT_TIMESTAMP - INTERVAL '6 hours 15 minutes', 6),
+(7, 2, 2, 50.00,  2, 50.00,  0.00,  0.00, 50.00,   0.00, 3, NULL, FALSE, CURRENT_TIMESTAMP - INTERVAL '4 hours 45 minutes', 6),
+
+-- SUCURSAL 1: Warnes Central - Turno 2 Activo de Ana (hace 2h en adelante)
+(8, 1, 2, 80.00,  1, 0.00,  80.00,  0.00, 100.00, 20.00, 2, NULL, FALSE, CURRENT_TIMESTAMP - INTERVAL '1 hour 30 minutes', 5),
+(9, 1, 2, 40.00,  2, 40.00,  0.00,  0.00, 40.00,   0.00, 1, NULL, FALSE, CURRENT_TIMESTAMP - INTERVAL '45 minutes', 5);
 
 INSERT INTO detalles_ventas (detalle_venta_id, producto_id, venta_id, inventario_id, precio_unitario, cantidad, marca_baja) VALUES
-(1, 1, 1, 2, 6.50, 2.00, FALSE), -- 2 Leches PIL = 13.00
-(2, 5, 1, 7, 11.00, 1.00, FALSE),-- 1 Coca-Cola = 11.00 (Total Venta 1 = 24.00)
-(3, 9, 2, 13, 30.00, 1.00, FALSE);-- 1 Cafe Nescafe = 30.00 (Total Venta 2 = 30.00)
+-- Venta 1 (50.00): 5 Leches Enteras PIL a 10.00 Bs
+(1, 1, 1, 2, 10.00, 5.00, FALSE),
+-- Venta 2 (75.00): 3 Coca-Cola 2L a 25.00 Bs
+(2, 5, 2, 7, 25.00, 3.00, FALSE),
+-- Venta 3 (100.00): 2 Nescafe Tradicion 200g a 50.00 Bs
+(3, 9, 3, 13, 50.00, 2.00, FALSE),
+-- Venta 4 (60.00): 6 Yogurts Frutilla PIL a 10.00 Bs
+(4, 3, 4, 4, 10.00, 6.00, FALSE),
+-- Venta 5 (40.00, Anulada): 4 Leches Deslactosadas PIL a 10.00 Bs
+(5, 2, 5, 3, 10.00, 4.00, TRUE),
+-- Venta 6 (80.00): 4 Mayonesas Kris a 20.00 Bs
+(6, 10, 6, 14, 20.00, 4.00, FALSE),
+-- Venta 7 (50.00): 2 Ketchups Kris a 25.00 Bs
+(7, 11, 7, 15, 25.00, 2.00, FALSE),
+-- Venta 8 (80.00, Turno Activo): 8 Leches Enteras PIL a 10.00 Bs
+(8, 1, 8, 2, 10.00, 8.00, FALSE),
+-- Venta 9 (40.00, Turno Activo): 4 Coca-Cola 2L a 10.00 Bs
+(9, 5, 9, 7, 10.00, 4.00, FALSE);
+
+-- ============================================================================
+-- 11.2. REPORTES BASE, ENTRADAS, SALIDAS Y MOVIMIENTOS (LIBRO MAYOR)
+-- ============================================================================
+INSERT INTO reportes (
+    reporte_id, sucursal_id, periodo, fecha_inicio, fecha_fin, 
+    monto_base, monto_entradas, monto_salidas, utilidad, 
+    datos_snapshot, marca_baja, fecha_creacion, usuario_creacion
+) VALUES
+-- Reporte 1: Turno de Ana María Flores (Sesión 1, duración 4h 30m)
+-- Total Ventas: 285.00 (Efectivo 80, QR 105, Tarjeta 100) + Movimiento Entrada 50 = Entradas 335.00
+-- Total Movimientos Salida: 30 + 25 = Salidas 55.00. Utilidad: 280.00.
+(1, 1, 'Turno', 
+ (SELECT hora_sesion_abierta FROM sesiones WHERE sesion_id = 1), 
+ (SELECT hora_sesion_cerrada FROM sesiones WHERE sesion_id = 1), 
+ 0.00, 335.00, 55.00, 280.00, 
+'{"resumenVentas":{"conteo":4,"efectivo":80.00,"qr":105.00,"tarjeta":100.00,"total":285.00},"resumenMovimientos":{"entradas":50.00,"salidas":55.00,"cantidad":3},"totalesArqueo":{"entradasDeclaradas":285.00,"salidasDeclaradas":0.00,"totalEntradasFinal":335.00,"totalSalidasFinal":55.00,"utilidad":280.00,"diferencia":0.00},"topProductos":[{"producto":"Cafe Instantaneo Nescafe Tradicion 200g","cantidad":2,"subtotal":100.00},{"producto":"Coca-Cola Sabor Original 2L","cantidad":3,"subtotal":75.00},{"producto":"Yogurt Bebible Frutilla PIL 1L","cantidad":6,"subtotal":60.00},{"producto":"Leche Entera PIL Bolsa 946ml","cantidad":5,"subtotal":50.00}]}'::jsonb, 
+FALSE, (SELECT hora_sesion_cerrada FROM sesiones WHERE sesion_id = 1), 5),
+
+-- Reporte 2: Turno de Luis Fernando Mamani (Sesión 3, duración 4h 00m)
+-- Total Ventas: 130.00 (Efectivo 80, QR 50). Salidas: 0.00. Utilidad: 130.00.
+(2, 2, 'Turno', 
+ (SELECT hora_sesion_abierta FROM sesiones WHERE sesion_id = 3), 
+ (SELECT hora_sesion_cerrada FROM sesiones WHERE sesion_id = 3), 
+ 0.00, 130.00,  0.00, 130.00, 
+'{"resumenVentas":{"conteo":2,"efectivo":80.00,"qr":50.00,"tarjeta":0.00,"total":130.00},"resumenMovimientos":{"entradas":0.00,"salidas":0.00,"cantidad":0},"totalesArqueo":{"entradasDeclaradas":130.00,"salidasDeclaradas":0.00,"totalEntradasFinal":130.00,"totalSalidasFinal":0.00,"utilidad":130.00,"diferencia":0.00},"topProductos":[{"producto":"Mayonesa Kris Doypack 500g","cantidad":4,"subtotal":80.00},{"producto":"Ketchup Kris Doypack 500g","cantidad":2,"subtotal":50.00}]}'::jsonb, 
+FALSE, (SELECT hora_sesion_cerrada FROM sesiones WHERE sesion_id = 3), 6);
+
+INSERT INTO entradas (entrada_id, reporte_id, tipo_entrada, monto, descripcion, marca_baja) VALUES
+-- Reporte 1 (Warnes Central, Turno Ana): 80 + 105 + 100 + 50 = 335.00 Bs
+(1, 1, 1, 80.00,  'Ventas en Efectivo (Sistema)', FALSE),
+(2, 1, 2, 105.00, 'Ventas por QR (Digital)', FALSE),
+(3, 1, 3, 100.00, 'Ventas con Tarjeta (POS)', FALSE),
+(4, 1, 5, 50.00,  'Movimientos de entrada del turno', FALSE),
+-- Reporte 2 (Warnes Norte, Turno Luis): 80 + 50 = 130.00 Bs
+(5, 2, 1, 80.00,  'Ventas en Efectivo (Sistema)', FALSE),
+(6, 2, 2, 50.00,  'Ventas por QR (Digital)', FALSE);
+
+INSERT INTO salidas (salida_id, reporte_id, tipo_salida, monto, descripcion, marca_baja) VALUES
+-- Reporte 1 (Warnes Central, Turno Ana): 30 + 25 = 55.00 Bs
+(1, 1, 1, 30.00, 'Adelanto de sueldo cajera Ana', FALSE),
+(2, 1, 3, 25.00, 'Gasto operativo insumos limpieza', FALSE),
+(3, 1, 1, 20.00, 'Adelanto anulado error admin', TRUE);
+
+INSERT INTO movimientos (
+    movimiento_id, sucursal_id, reporte_id, monto, tipo_movimiento, 
+    metodo_movimiento, detalle, marca_baja, fecha_creacion, usuario_creacion
+) VALUES
+-- Movimientos sellados en Reporte 1 (Turno cerrado de Ana)
+(1, 1, 1, 50.00, 1, 1, 'Cobro servicio fotocopias e impresiones', FALSE, CURRENT_TIMESTAMP - INTERVAL '7 hours', 5),
+(2, 1, 1, 30.00, 2, 1, 'Adelanto de sueldo a cajera Ana', FALSE, CURRENT_TIMESTAMP - INTERVAL '6 hours', 5),
+(3, 1, 1, 25.00, 2, 1, 'Gasto operativo insumos de limpieza', FALSE, CURRENT_TIMESTAMP - INTERVAL '5 hours', 5),
+(4, 1, 1, 20.00, 2, 1, 'Adelanto anulado por error', TRUE, CURRENT_TIMESTAMP - INTERVAL '4 hours 30 minutes', 5),
+
+-- Movimientos pendientes de arqueo en Sesión 2 activa (Turno activo de Ana)
+(5, 1, NULL, 25.00, 1, 1, 'Ingreso extraordinario cobro flete', FALSE, CURRENT_TIMESTAMP - INTERVAL '1 hour 15 minutes', 5),
+(6, 1, NULL, 15.00, 2, 1, 'Compra cafe y azucar para el personal', FALSE, CURRENT_TIMESTAMP - INTERVAL '30 minutes', 5);
 
 -- ============================================================================
 -- 12. HISTORIAL DE INVENTARIO (KARDEX INICIAL)
@@ -500,8 +659,8 @@ SELECT setval('ventas_venta_id_seq', (SELECT MAX(venta_id) FROM ventas));
 SELECT setval('detalles_ventas_detalle_venta_id_seq', (SELECT MAX(detalle_venta_id) FROM detalles_ventas));
 SELECT setval('historial_inventario_historial_id_seq', (SELECT MAX(historial_id) FROM historial_inventario));
 SELECT setval('notificaciones_id_notificacion_seq', COALESCE((SELECT MAX(id_notificacion) FROM notificaciones), 1), (SELECT COUNT(*) > 0 FROM notificaciones));
-SELECT setval('reportes_reporte_id_seq', 1, false);
-SELECT setval('movimientos_movimiento_id_seq', 1, false);
-SELECT setval('entradas_entrada_id_seq', 1, false);
-SELECT setval('salidas_salida_id_seq', 1, false);
-SELECT setval('sesiones_sesion_id_seq', 1, false);
+SELECT setval('reportes_reporte_id_seq', (SELECT MAX(reporte_id) FROM reportes));
+SELECT setval('movimientos_movimiento_id_seq', (SELECT MAX(movimiento_id) FROM movimientos));
+SELECT setval('entradas_entrada_id_seq', (SELECT MAX(entrada_id) FROM entradas));
+SELECT setval('salidas_salida_id_seq', (SELECT MAX(salida_id) FROM salidas));
+SELECT setval('sesiones_sesion_id_seq', (SELECT MAX(sesion_id) FROM sesiones));

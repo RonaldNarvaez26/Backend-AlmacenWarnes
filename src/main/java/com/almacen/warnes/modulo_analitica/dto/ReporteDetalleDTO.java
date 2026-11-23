@@ -16,6 +16,7 @@ public class ReporteDetalleDTO {
     private Integer reporteId;
     private Integer sucursalId;
     private String codigoSucursal;
+    private String nombreSucursal;
     private String periodo;
     private LocalDateTime fechaInicio;
     private LocalDateTime fechaFin;
