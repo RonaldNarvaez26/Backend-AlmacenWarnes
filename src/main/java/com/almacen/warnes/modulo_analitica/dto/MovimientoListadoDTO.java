@@ -26,4 +26,6 @@ public class MovimientoListadoDTO {
     private Integer sucursalId;
     private LocalDateTime fechaCreacion;
     private Boolean sellado;
+    private Integer rolUsuario;
+    private Boolean requiereConsolidacion;
 }

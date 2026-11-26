@@ -1,22 +1,29 @@
 package com.almacen.warnes.modulo_seguridad.service;
 
 import com.almacen.warnes.modulo_seguridad.dto.*;
+import com.almacen.warnes.modulo_seguridad.jwt.BlockedUsersRegistry;
 import com.almacen.warnes.modulo_seguridad.jwt.JwtService;
 import com.almacen.warnes.modulo_seguridad.mapper.UsuarioMapper;
 import com.almacen.warnes.modulo_seguridad.model.Usuario;
 import com.almacen.warnes.modulo_seguridad.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.Types;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,7 +35,11 @@ public class UsuarioService {
     private final JdbcTemplate jdbcTemplate;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final BlockedUsersRegistry blockedUsersRegistry;
     private final com.almacen.warnes.modulo_seguridad.repository.SesionRepository sesionRepository;
+
+    @Value("${app.setup.secret-key:WARNES-SETUP-2026}")
+    private String setupSecretKey;
 
     // =========================================================================
     // 1. GESTION DE USUARIOS (CRUD Y PROCEDURES)
@@ -121,7 +132,45 @@ public class UsuarioService {
      */
     @Transactional
     public void eliminarUsuario(Integer usuarioId, Integer usuarioModificacion) {
+        if (usuarioModificacion != null && usuarioId.equals(usuarioModificacion)) {
+            throw new IllegalArgumentException("No puedes dar de baja tu propia cuenta en sesión.");
+        }
         jdbcTemplate.update("CALL sp_usuarios_eliminar(?, ?)", usuarioId, usuarioModificacion);
+        blockedUsersRegistry.markBlocked(usuarioId);
+    }
+
+    /**
+     * Bloquea (3) o activa/desbloquea (1) una cuenta de usuario invocando sp_usuarios_cambiar_estado.
+     * Si se bloquea, cierra cualquier sesión activa abierta del usuario y actualiza la caché en memoria.
+     */
+    @Transactional
+    public void cambiarEstadoUsuario(Integer usuarioId, Integer nuevoEstado, Integer operadorId) {
+        if (nuevoEstado == null || (nuevoEstado != 1 && nuevoEstado != 3)) {
+            throw new IllegalArgumentException("Estado no válido. Solo se permite Activo (1) o Bloqueado (3).");
+        }
+        if (operadorId == null) {
+            throw new IllegalArgumentException("Se requiere identificar al administrador que realiza la operación.");
+        }
+        if (usuarioId.equals(operadorId)) {
+            throw new IllegalArgumentException("No puedes bloquear ni modificar el estado de tu propia cuenta en sesión.");
+        }
+
+        jdbcTemplate.update("CALL sp_usuarios_cambiar_estado(?, ?, ?)", usuarioId, nuevoEstado, operadorId);
+
+        if (nuevoEstado == 3) {
+            blockedUsersRegistry.markBlocked(usuarioId);
+            try {
+                Optional<SesionDTO> sesionActiva = sesionRepository.obtenerSesionActiva(usuarioId);
+                if (sesionActiva.isPresent()) {
+                    sesionRepository.cerrarSesion(sesionActiva.get().getSesionId(), usuarioId);
+                }
+            } catch (Exception e) {
+                org.slf4j.LoggerFactory.getLogger(UsuarioService.class)
+                        .warn("No se pudo cerrar la sesión activa tras bloquear usuarioId {}: {}", usuarioId, e.getMessage());
+            }
+        } else {
+            blockedUsersRegistry.markActive(usuarioId);
+        }
     }
 
     // =========================================================================
@@ -137,7 +186,7 @@ public class UsuarioService {
                 .orElseThrow(() -> new BadCredentialsException("Usuario o contraseña incorrectos"));
 
         if (usuario.getEstado() != null && usuario.getEstado() == 3) {
-            throw new BadCredentialsException("La cuenta de usuario se encuentra bloqueada. Contacte al propietario.");
+            throw new LockedException("Tu cuenta se encuentra bloqueada. Contacta con un propietario o administrador del sistema.");
         }
 
         if (!passwordEncoder.matches(dto.getPassword(), usuario.getPassword())) {
@@ -182,11 +231,62 @@ public class UsuarioService {
      */
     @Transactional
     public void solicitarRecuperacion(String usuario) {
-        boolean existe = usuarioRepository.existsByUsuarioAndMarcaBajaFalse(usuario);
-        if (!existe) {
-            throw new IllegalArgumentException("No se encontró ningún usuario activo con el nombre: " + usuario);
+        Usuario u = usuarioRepository.findByUsuarioAndMarcaBajaFalse(usuario)
+                .orElseThrow(() -> new IllegalArgumentException("No se encontró ningún usuario activo con el nombre: " + usuario));
+
+        if (u.getEstado() != null && u.getEstado() == 3) {
+            throw new IllegalStateException("Tu cuenta se encuentra bloqueada. Contacta con un propietario o administrador del sistema.");
         }
+
         jdbcTemplate.update("CALL sp_usuarios_solicitar_recuperacion(?)", usuario);
+    }
+
+    /**
+     * Verifica si el sistema requiere configuración inicial (no existe ningún Propietario activo en BD).
+     */
+    public Map<String, Object> obtenerEstadoInicial() {
+        long totalPropietarios = usuarioRepository.countByRolIdAndMarcaBajaFalse(3);
+        return Map.of(
+                "requiereConfiguracionInicial", totalPropietarios == 0,
+                "requiereClaveInstalacion", true
+        );
+    }
+
+    /**
+     * Registra al primer Propietario del sistema cuando la tabla Usuarios no tiene ningún Propietario.
+     * Exige la clave secreta de instalación configurada en app.setup.secret-key y se auto-desactiva tras el primer registro.
+     */
+    @Transactional
+    public synchronized Integer registrarPrimerAdmin(PrimerAdminRegistroDTO dto) {
+        if (usuarioRepository.countByRolIdAndMarcaBajaFalse(3) > 0) {
+            throw new IllegalStateException("El sistema ya cuenta con un Propietario configurado. El registro inicial ha sido deshabilitado.");
+        }
+
+        String claveConfigurada = setupSecretKey != null ? setupSecretKey.trim() : "";
+        String claveRecibida = dto.getClaveSecreta() != null ? dto.getClaveSecreta().trim() : "";
+
+        if (claveConfigurada.isEmpty() || !MessageDigest.isEqual(
+                claveConfigurada.getBytes(StandardCharsets.UTF_8),
+                claveRecibida.getBytes(StandardCharsets.UTF_8))) {
+            throw new BadCredentialsException("La clave secreta de instalación es incorrecta.");
+        }
+
+        String username = dto.getUsuario().trim();
+        if (usuarioRepository.existsByUsuarioAndMarcaBajaFalse(username)) {
+            throw new IllegalArgumentException("El nombre de usuario '" + username + "' ya está registrado.");
+        }
+
+        UsuarioRegistroDTO registro = UsuarioRegistroDTO.builder()
+                .usuario(username)
+                .sucursalId(0)
+                .nombres(dto.getNombres().trim())
+                .apellidos(dto.getApellidos().trim())
+                .rolId(3)
+                .password(dto.getPassword())
+                .usuarioCreacion(1)
+                .build();
+
+        return registrarUsuario(registro);
     }
 
     /**
@@ -207,6 +307,7 @@ public class UsuarioService {
             usuario.setUsuarioModificacion(dto.getUsuarioModificacion());
         }
         usuarioRepository.save(usuario);
+        blockedUsersRegistry.markActive(usuario.getUsuarioId());
     }
 
     /**
@@ -227,5 +328,6 @@ public class UsuarioService {
         usuario.setFechaModificacion(LocalDateTime.now());
         usuario.setUsuarioModificacion(dto.getUsuarioId());
         usuarioRepository.save(usuario);
+        blockedUsersRegistry.markActive(usuario.getUsuarioId());
     }
 }

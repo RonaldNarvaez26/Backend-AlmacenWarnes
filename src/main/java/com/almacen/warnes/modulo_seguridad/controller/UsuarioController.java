@@ -1,7 +1,9 @@
 package com.almacen.warnes.modulo_seguridad.controller;
 
 import com.almacen.warnes.modulo_seguridad.dto.*;
+import com.almacen.warnes.modulo_seguridad.model.Usuario;
 import com.almacen.warnes.modulo_seguridad.service.UsuarioService;
+import com.almacen.warnes.modulo_seguridad.util.SecurityContextHelper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -20,6 +22,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Tag(name = "Seguridad - Usuarios", description = "Gestión de cuentas de usuarios, asignación de roles, control de sucursales y auditoría")
 @CrossOrigin(origins = "*", allowedHeaders = "*", methods = {
@@ -28,11 +31,12 @@ import java.util.Map;
 })
 @Slf4j
 @RestController
-@RequestMapping({"/api/seguridad/usuarios", "/api/usuarios"})
+@RequestMapping({ "/api/seguridad/usuarios", "/api/usuarios" })
 @RequiredArgsConstructor
 public class UsuarioController {
 
         private final UsuarioService usuarioService;
+        private final SecurityContextHelper securityContextHelper;
 
         @Operation(summary = "Listar usuarios con filtros dinámicos y buscador", description = "Ejecuta la función almacenada `fn_usuarios_listar(p_mostrar_bajas, p_rol_id, p_sucursal_id, p_texto_busqueda)` en PostgreSQL. Retorna los usuarios con su rol paramétrico, sucursal, estado y fecha de creación.")
         @ApiResponses({
@@ -149,25 +153,79 @@ public class UsuarioController {
                 }
         }
 
+        @Operation(summary = "Bloquear o desbloquear una cuenta de usuario", description = "Cambia el estado de cuenta del usuario entre Activo (1) y Bloqueado (3) invocando sp_usuarios_cambiar_estado. Impide auto-bloqueo y el bloqueo del último propietario activo.")
+        @PatchMapping("/{id}/estado")
+        public ResponseEntity<?> cambiarEstadoUsuario(
+                        @Parameter(description = "ID del usuario a actualizar", example = "5", required = true) @PathVariable Integer id,
+                        @RequestHeader(value = "Authorization", required = false) String authHeader,
+                        @Valid @RequestBody CambiarEstadoUsuarioDTO dto) {
+                Optional<Usuario> authOpt = securityContextHelper.obtenerUsuarioSesion(null, authHeader);
+                if (authOpt.isPresent() && (authOpt.get().getRolId() == null || authOpt.get().getRolId() != 3)) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                                        .body(Map.of("error",
+                                                        "Solo el Propietario puede bloquear o desbloquear cuentas."));
+                }
+
+                Integer operadorId = authOpt.map(Usuario::getUsuarioId).orElse(dto.getUsuarioModificacion());
+                log.info("Solicitud para cambiar estado del usuario ID: {} a estado {} por operador ID: {}",
+                                id, dto.getEstado(), operadorId);
+                try {
+                        usuarioService.cambiarEstadoUsuario(id, dto.getEstado(), operadorId);
+                        String mensaje = dto.getEstado() == 3
+                                        ? "Cuenta de usuario bloqueada exitosamente"
+                                        : "Cuenta de usuario desbloqueada y activada exitosamente";
+                        return ResponseEntity.ok(Map.of("mensaje", mensaje, "estado", dto.getEstado()));
+                } catch (IllegalArgumentException e) {
+                        log.warn("Validación rechazada al cambiar estado de usuario ID {}: {}", id, e.getMessage());
+                        return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+                } catch (Exception e) {
+                        String msg = extraerMensajeLimpio(e);
+                        log.error("Error al cambiar estado de usuario ID {}: {}", id, msg);
+                        return ResponseEntity.badRequest().body(Map.of("error", msg));
+                }
+        }
+
         @Operation(summary = "Dar de baja lógica a un usuario", description = "Invoca el procedimiento almacenado `CALL sp_usuarios_eliminar(...)`. Establece `marca_baja = true` y registra la autoría de modificación sin eliminar el registro físicamente.")
         @ApiResponses({
                         @ApiResponse(responseCode = "200", description = "Usuario dado de baja exitosamente"),
+                        @ApiResponse(responseCode = "400", description = "Operación no permitida (auto-baja o último propietario)"),
                         @ApiResponse(responseCode = "500", description = "Error interno al dar de baja el usuario")
         })
         @DeleteMapping("/{id}")
         public ResponseEntity<?> eliminarUsuario(
                         @Parameter(description = "ID del usuario a eliminar lógicamente", example = "1", required = true) @PathVariable Integer id,
-                        @Parameter(description = "ID del usuario que realiza la operación", example = "3", required = true) @RequestParam Integer usuarioModificacion) {
-                log.info("Solicitud para dar de baja lógica al usuario ID: {} por usuarioModificacion: {}", id,
-                                usuarioModificacion);
+                        @RequestHeader(value = "Authorization", required = false) String authHeader,
+                        @Parameter(description = "ID del usuario que realiza la operación", example = "3") @RequestParam(required = false) Integer usuarioModificacion) {
+                Optional<Usuario> authOpt = securityContextHelper.obtenerUsuarioSesion(null, authHeader);
+                if (authOpt.isPresent() && (authOpt.get().getRolId() == null || authOpt.get().getRolId() != 3)) {
+                        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                                        .body(Map.of("error", "Solo el Propietario puede dar de baja cuentas."));
+                }
+                Integer operadorId = authOpt.map(Usuario::getUsuarioId).orElse(usuarioModificacion);
+                log.info("Solicitud para dar de baja lógica al usuario ID: {} por operadorId: {}", id, operadorId);
                 try {
-                        usuarioService.eliminarUsuario(id, usuarioModificacion);
+                        usuarioService.eliminarUsuario(id, operadorId);
                         log.info("Usuario ID: {} dado de baja lógica exitosamente", id);
                         return ResponseEntity.ok(Map.of("mensaje", "Usuario dado de baja exitosamente"));
+                } catch (IllegalArgumentException e) {
+                        log.warn("Validación rechazada al dar de baja usuario ID {}: {}", id, e.getMessage());
+                        return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
                 } catch (Exception e) {
-                        log.error("Error al dar de baja al usuario ID: {}: {}", id, e.getMessage());
-                        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                                        .body(Map.of("error", "Error al dar de baja el usuario: " + e.getMessage()));
+                        String msg = extraerMensajeLimpio(e);
+                        log.error("Error al dar de baja al usuario ID: {}: {}", id, msg);
+                        return ResponseEntity.badRequest().body(Map.of("error", msg));
                 }
+        }
+
+        private String extraerMensajeLimpio(Exception e) {
+                String msg = e.getMessage();
+                if (msg != null && msg.contains("ERROR:")) {
+                        int start = msg.indexOf("ERROR:") + 6;
+                        int end = msg.indexOf("\n", start);
+                        if (end == -1)
+                                end = msg.length();
+                        return msg.substring(start, end).trim();
+                }
+                return msg != null ? msg : "Error al procesar la operación de usuario.";
         }
 }

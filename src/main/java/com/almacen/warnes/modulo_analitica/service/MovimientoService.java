@@ -11,7 +11,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -42,7 +47,7 @@ public class MovimientoService {
         log.info("Creando movimiento: sucursal={}, tipo={}, monto={}, usuarioId={}",
                 sucursalIdEfectiva, dto.getTipoMovimiento(), dto.getMonto(), usuarioAutenticado.getUsuarioId());
 
-        return movimientoRepository.insertarMovimiento(
+        Integer nuevoId = movimientoRepository.insertarMovimiento(
                 sucursalIdEfectiva,
                 dto.getMonto(),
                 dto.getTipoMovimiento(),
@@ -50,6 +55,75 @@ public class MovimientoService {
                 dto.getDetalle(),
                 usuarioAutenticado.getUsuarioId()
         );
+        return nuevoId;
+    }
+
+    @Transactional
+    public Map<String, Object> registrarYConsolidarSiAplica(CrearMovimientoDTO dto, Usuario usuarioAutenticado) {
+        Integer nuevoId = crearMovimiento(dto, usuarioAutenticado);
+        Integer reporteId = null;
+
+        boolean esSupervisorOProp = usuarioAutenticado.getRolId() == 2 || usuarioAutenticado.getRolId() == 3;
+        if (esSupervisorOProp && Boolean.TRUE.equals(dto.getConsolidarDirecto())) {
+            Integer sucursalIdEfectiva = usuarioAutenticado.getRolId() == 3
+                    ? dto.getSucursalId()
+                    : usuarioAutenticado.getSucursalId();
+            reporteId = movimientoRepository.consolidarMovimientos(
+                    sucursalIdEfectiva,
+                    List.of(nuevoId),
+                    usuarioAutenticado.getUsuarioId()
+            );
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("movimientoId", nuevoId);
+        if (reporteId != null) {
+            result.put("reporteId", reporteId);
+        }
+        return result;
+    }
+
+    @Transactional
+    public List<Integer> consolidarMovimientos(List<Integer> movimientoIds, Usuario usuarioAutenticado) {
+        if (usuarioAutenticado == null || (usuarioAutenticado.getRolId() != 2 && usuarioAutenticado.getRolId() != 3)) {
+            throw new SecurityException("Solo un Supervisor o Propietario puede consolidar movimientos directamente.");
+        }
+        if (movimientoIds == null || movimientoIds.isEmpty()) {
+            throw new IllegalArgumentException("Debe seleccionar al menos un movimiento pendiente para consolidar.");
+        }
+
+        Integer sucursalFiltro = usuarioAutenticado.getRolId() == 2 ? usuarioAutenticado.getSucursalId() : null;
+        List<MovimientoListadoDTO> pendientes = movimientoRepository.listarMovimientos(
+                sucursalFiltro, null, true, null, null, null, null, "PENDIENTES"
+        );
+
+        Set<Integer> idsSolicitados = Set.copyOf(movimientoIds);
+        Map<Integer, List<Integer>> porSucursal = pendientes.stream()
+                .filter(m -> idsSolicitados.contains(m.getMovimientoId()))
+                .collect(Collectors.groupingBy(
+                        MovimientoListadoDTO::getSucursalId,
+                        LinkedHashMap::new,
+                        Collectors.mapping(MovimientoListadoDTO::getMovimientoId, Collectors.toList())
+                ));
+
+        if (porSucursal.isEmpty()) {
+            throw new IllegalArgumentException("No se encontraron movimientos pendientes válidos en su sucursal para consolidar.");
+        }
+
+        List<Integer> reportesGenerados = new ArrayList<>();
+        for (Map.Entry<Integer, List<Integer>> entry : porSucursal.entrySet()) {
+            log.info("Consolidando {} movimiento(s) en sucursal {} por usuario {}",
+                    entry.getValue().size(), entry.getKey(), usuarioAutenticado.getUsuarioId());
+            Integer repId = movimientoRepository.consolidarMovimientos(
+                    entry.getKey(),
+                    entry.getValue(),
+                    usuarioAutenticado.getUsuarioId()
+            );
+            if (repId != null) {
+                reportesGenerados.add(repId);
+            }
+        }
+        return reportesGenerados;
     }
 
     @Transactional
@@ -79,6 +153,7 @@ public class MovimientoService {
             Integer usuarioIdParam,
             LocalDate fechaDesde,
             LocalDate fechaHasta,
+            String estado,
             Usuario usuarioAutenticado
     ) {
         Integer sucursalEfectiva = sucursalIdParam;
@@ -105,7 +180,8 @@ public class MovimientoService {
                 tipoMovimiento,
                 usuarioEfectivo,
                 fechaDesde,
-                fechaHasta
+                fechaHasta,
+                estado
         );
     }
 }

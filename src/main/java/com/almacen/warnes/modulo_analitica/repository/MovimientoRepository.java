@@ -7,6 +7,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.sql.Array;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.Date;
@@ -87,6 +88,24 @@ public class MovimientoRepository {
     }
 
     /**
+     * Consolida movimientos pendientes en un reporte administrativo de Libro Mayor invocando sp_movimientos_consolidar.
+     */
+    public Integer consolidarMovimientos(Integer sucursalId, List<Integer> movimientoIds, Integer usuarioId) {
+        return jdbcTemplate.execute((Connection conn) -> {
+            try (CallableStatement cs = conn.prepareCall("CALL sp_movimientos_consolidar(?, ?, ?, ?)")) {
+                cs.setInt(1, sucursalId);
+                Array sqlArray = conn.createArrayOf("integer", movimientoIds.toArray());
+                cs.setArray(2, sqlArray);
+                cs.setInt(3, usuarioId);
+                cs.registerOutParameter(4, Types.INTEGER);
+                cs.execute();
+                int repId = cs.getInt(4);
+                return cs.wasNull() ? null : repId;
+            }
+        });
+    }
+
+    /**
      * Lista movimientos con filtros invocando fn_movimientos_listar.
      */
     public List<MovimientoListadoDTO> listarMovimientos(
@@ -96,12 +115,13 @@ public class MovimientoRepository {
             Integer tipoMovimiento,
             Integer usuarioId,
             LocalDate fechaDesde,
-            LocalDate fechaHasta
+            LocalDate fechaHasta,
+            String estado
     ) {
         String sql = "SELECT movimiento_id, reporte_id, monto, tipo_movimiento, descripcion_tipo, " +
                 "metodo_movimiento, descripcion_metodo, detalle, usuario_creacion, nombre_usuario, " +
-                "sucursal_id, fecha_creacion " +
-                "FROM fn_movimientos_listar(?, ?, ?, ?, ?, ?, ?)";
+                "sucursal_id, fecha_creacion, rol_usuario, requiere_consolidacion " +
+                "FROM fn_movimientos_listar(?, ?, ?, ?, ?, ?, ?, ?)";
 
         return jdbcTemplate.query(sql, (rs, rowNum) -> {
             Integer repId = (Integer) rs.getObject("reporte_id");
@@ -121,6 +141,8 @@ public class MovimientoRepository {
                             ? rs.getTimestamp("fecha_creacion").toLocalDateTime()
                             : null)
                     .sellado(repId != null)
+                    .rolUsuario((Integer) rs.getObject("rol_usuario"))
+                    .requiereConsolidacion(rs.getBoolean("requiere_consolidacion"))
                     .build();
         },
                 sucursalId,
@@ -129,7 +151,8 @@ public class MovimientoRepository {
                 tipoMovimiento,
                 usuarioId,
                 fechaDesde != null ? Date.valueOf(fechaDesde) : null,
-                fechaHasta != null ? Date.valueOf(fechaHasta) : null
+                fechaHasta != null ? Date.valueOf(fechaHasta) : null,
+                (estado != null && !estado.isBlank()) ? estado.trim().toUpperCase() : null
         );
     }
 }

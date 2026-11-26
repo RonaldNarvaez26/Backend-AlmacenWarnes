@@ -3,6 +3,7 @@ package com.almacen.warnes.modulo_seguridad.controller;
 import com.almacen.warnes.modulo_seguridad.dto.CambiarContrasenaDTO;
 import com.almacen.warnes.modulo_seguridad.dto.LoginRequestDTO;
 import com.almacen.warnes.modulo_seguridad.dto.LoginResponseDTO;
+import com.almacen.warnes.modulo_seguridad.dto.PrimerAdminRegistroDTO;
 import com.almacen.warnes.modulo_seguridad.dto.RecuperarContrasenaDTO;
 import com.almacen.warnes.modulo_seguridad.dto.SolicitarRecuperacionDTO;
 import com.almacen.warnes.modulo_seguridad.service.UsuarioService;
@@ -18,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -54,6 +56,13 @@ public class LoginController {
             log.info("Inicio de sesión exitoso -> usuario: '{}', ID: {}, sucursalId: {}, rolId: {}, estado: {}", 
                     response.getUsuario(), response.getUsuarioId(), response.getSucursalId(), response.getRolId(), response.getEstado());
             return ResponseEntity.ok(response);
+        } catch (LockedException e) {
+            log.warn("Intento de login con cuenta bloqueada '{}': {}", dto.getUsuario(), e.getMessage());
+            return ResponseEntity.status(HttpStatus.LOCKED)
+                    .body(Map.of(
+                            "error", e.getMessage(),
+                            "codigo", "CUENTA_BLOQUEADA"
+                    ));
         } catch (BadCredentialsException e) {
             log.warn("Fallo de autenticación para usuario '{}': {}", dto.getUsuario(), e.getMessage());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -62,6 +71,44 @@ public class LoginController {
             log.error("Error no controlado durante el inicio de sesión para '{}': {}", dto.getUsuario(), e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Error durante el inicio de sesión: " + e.getMessage()));
+        }
+    }
+
+    @Operation(
+            summary = "Consultar estado de configuración inicial",
+            description = "Indica si el sistema aún no tiene ningún usuario Propietario registrado y requiere ejecutar el asistente inicial."
+    )
+    @GetMapping("/estado-inicial")
+    public ResponseEntity<?> estadoInicial() {
+        return ResponseEntity.ok(usuarioService.obtenerEstadoInicial());
+    }
+
+    @Operation(
+            summary = "Registrar primer Propietario / Administrador (Instalación)",
+            description = "Crea la primera cuenta con rol Propietario (rolId = 3) validando la clave secreta de instalación. Se deshabilita automáticamente en cuanto existe al menos un Propietario."
+    )
+    @PostMapping("/registrar-primer-admin")
+    public ResponseEntity<?> registrarPrimerAdmin(@Valid @RequestBody PrimerAdminRegistroDTO dto) {
+        log.info("Solicitud de registro inicial de Propietario para usuario: '{}'", dto.getUsuario());
+        try {
+            Integer nuevoId = usuarioService.registrarPrimerAdmin(dto);
+            log.info("Primer Propietario '{}' creado exitosamente con ID: {}", dto.getUsuario(), nuevoId);
+            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                    "mensaje", "Cuenta de Propietario configurada exitosamente. Ya puedes iniciar sesión.",
+                    "usuarioId", nuevoId
+            ));
+        } catch (IllegalStateException e) {
+            log.warn("Intento de usar registro inicial cuando ya existe propietario: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
+        } catch (BadCredentialsException e) {
+            log.warn("Clave secreta de instalación incorrecta para '{}'", dto.getUsuario());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("Error al registrar primer propietario '{}': {}", dto.getUsuario(), e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Error al configurar el primer propietario: " + e.getMessage()));
         }
     }
 
@@ -81,6 +128,13 @@ public class LoginController {
             usuarioService.solicitarRecuperacion(dto.getUsuario());
             log.info("Solicitud registrada correctamente para '{}', estado cambiado a 2 (Solicita Recuperación)", dto.getUsuario());
             return ResponseEntity.ok(Map.of("mensaje", "Solicitud de recuperación enviada. El propietario revisará su solicitud."));
+        } catch (IllegalStateException e) {
+            log.warn("Solicitud de recuperación rechazada por cuenta bloqueada '{}': {}", dto.getUsuario(), e.getMessage());
+            return ResponseEntity.status(HttpStatus.LOCKED)
+                    .body(Map.of(
+                            "error", e.getMessage(),
+                            "codigo", "CUENTA_BLOQUEADA"
+                    ));
         } catch (IllegalArgumentException e) {
             log.warn("Error en solicitud de recuperación para '{}': {}", dto.getUsuario(), e.getMessage());
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));

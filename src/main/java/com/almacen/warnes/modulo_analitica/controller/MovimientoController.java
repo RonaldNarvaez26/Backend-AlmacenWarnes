@@ -10,6 +10,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -36,7 +38,7 @@ public class MovimientoController {
     private final MovimientoService movimientoService;
     private final SecurityContextHelper securityContextHelper;
 
-    @Operation(summary = "Registrar un movimiento de caja (Entrada o Salida)", description = "Inserta un movimiento en estado pendiente (reporte_id = NULL) invocando sp_movimientos_insertar.")
+    @Operation(summary = "Registrar un movimiento de caja (Entrada o Salida)", description = "Inserta un movimiento y, opcionalmente para Supervisor/Propietario, lo consolida inmediatamente en Libro Mayor.")
     @PostMapping
     public ResponseEntity<?> registrarMovimiento(
             @RequestHeader(value = "Authorization", required = false) String authHeader,
@@ -49,14 +51,47 @@ public class MovimientoController {
         }
 
         try {
-            Integer nuevoId = movimientoService.crearMovimiento(dto, uOpt.get());
-            return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(Map.of("mensaje", "Movimiento registrado con éxito", "movimientoId", nuevoId));
+            Map<String, Object> res = movimientoService.registrarYConsolidarSiAplica(dto, uOpt.get());
+            Integer reporteId = (Integer) res.get("reporteId");
+            String msg = reporteId != null
+                    ? "Movimiento registrado y consolidado en Libro Mayor (R-" + reporteId + ")"
+                    : "Movimiento registrado con éxito";
+            res.put("mensaje", msg);
+            return ResponseEntity.status(HttpStatus.CREATED).body(res);
         } catch (IllegalArgumentException | IllegalStateException e) {
             log.warn("Validación fallida en movimiento: {}", e.getMessage());
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             log.error("Error al registrar movimiento: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", extraerMensajeLimpio(e)));
+        }
+    }
+
+    @Operation(summary = "Consolidar movimientos pendientes en Libro Mayor", description = "Permite a Supervisor o Propietario consolidar movimientos administrativos o de turnos cerrados sin arqueo, generando un reporte en Libro Mayor.")
+    @PostMapping("/consolidar")
+    public ResponseEntity<?> consolidarMovimientos(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @Valid @RequestBody ConsolidarMovimientosRequest request
+    ) {
+        Optional<Usuario> uOpt = securityContextHelper.obtenerUsuarioSesion(null, authHeader);
+        if (uOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Sesión no válida"));
+        }
+
+        try {
+            List<Integer> reportesIds = movimientoService.consolidarMovimientos(request.getMovimientoIds(), uOpt.get());
+            return ResponseEntity.ok(Map.of(
+                    "mensaje", "Movimientos consolidados en Libro Mayor correctamente",
+                    "reporteIds", reportesIds
+            ));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("Error al consolidar movimientos: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", extraerMensajeLimpio(e)));
         }
@@ -68,11 +103,12 @@ public class MovimientoController {
             @RequestHeader(value = "Authorization", required = false) String authHeader,
             @Parameter(description = "ID de la sucursal") @RequestParam(required = false) Integer sucursalId,
             @Parameter(description = "ID del reporte (arqueo)") @RequestParam(required = false) Integer reporteId,
-            @Parameter(description = "Solo movimientos pendientes (sin sellar)") @RequestParam(required = false) Boolean soloPendientes,
+            @Parameter(description = "Solo movimientos pendientes") @RequestParam(required = false) Boolean soloPendientes,
             @Parameter(description = "Tipo de movimiento (1=Entrada, 2=Salida)") @RequestParam(required = false) Integer tipoMovimiento,
             @Parameter(description = "Usuario creador") @RequestParam(required = false) Integer usuarioId,
             @Parameter(description = "Fecha desde (YYYY-MM-DD)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaDesde,
-            @Parameter(description = "Fecha hasta (YYYY-MM-DD)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaHasta
+            @Parameter(description = "Fecha hasta (YYYY-MM-DD)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fechaHasta,
+            @Parameter(description = "Filtro de estado: PENDIENTES, CONSOLIDADOS o TODOS") @RequestParam(required = false) String estado
     ) {
         Optional<Usuario> uOpt = securityContextHelper.obtenerUsuarioSesion(null, authHeader);
         Usuario authUser = uOpt.orElse(null);
@@ -85,6 +121,7 @@ public class MovimientoController {
                 usuarioId,
                 fechaDesde,
                 fechaHasta,
+                estado,
                 authUser
         );
         return ResponseEntity.ok(lista);
@@ -148,5 +185,11 @@ public class MovimientoController {
             return msg.substring(start, end).trim();
         }
         return msg != null ? msg : "Error al procesar el movimiento.";
+    }
+
+    @Data
+    public static class ConsolidarMovimientosRequest {
+        @NotEmpty(message = "Debe enviar al menos un ID de movimiento")
+        private List<Integer> movimientoIds;
     }
 }

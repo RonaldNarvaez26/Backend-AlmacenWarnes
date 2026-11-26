@@ -19,6 +19,11 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Integer> {
 
     boolean existsByUsuarioAndMarcaBajaFalse(String usuario);
 
+    long countByRolIdAndMarcaBajaFalse(Integer rolId);
+
+    @Query("SELECT u.usuarioId FROM Usuario u WHERE u.estado = 3 OR u.marcaBaja = true")
+    List<Integer> findIdsBloqueadosOBaja();
+
     // Llamada a la funcion fn_usuarios_listar de PostgreSQL
     @Query(value = "SELECT * FROM fn_usuarios_listar(:mostrarBajas, :rolId, :sucursalId, :textoBusqueda)", nativeQuery = true)
     List<Object[]> listarUsuariosFiltrados(

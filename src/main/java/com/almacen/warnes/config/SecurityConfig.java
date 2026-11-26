@@ -1,5 +1,9 @@
 package com.almacen.warnes.config;
 
+import com.almacen.warnes.modulo_seguridad.jwt.BlockedUsersRegistry;
+import com.almacen.warnes.modulo_seguridad.jwt.JwtBlockedUserFilter;
+import com.almacen.warnes.modulo_seguridad.jwt.JwtService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
@@ -11,13 +15,18 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.filter.CorsFilter;
 
 import java.util.Arrays;
 import java.util.List;
 
 @Configuration
 @EnableWebSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
+
+    private final JwtService jwtService;
+    private final BlockedUsersRegistry blockedUsersRegistry;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -25,7 +34,8 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults()) // Habilita la configuración de CORS
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .anyRequest().permitAll());
+                        .anyRequest().permitAll())
+                .addFilterAfter(new JwtBlockedUserFilter(jwtService, blockedUsersRegistry), CorsFilter.class);
         return http.build();
     }
 

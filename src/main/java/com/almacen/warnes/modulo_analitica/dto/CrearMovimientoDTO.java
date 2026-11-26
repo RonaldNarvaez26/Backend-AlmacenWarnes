@@ -34,4 +34,9 @@ public class CrearMovimientoDTO {
     @NotNull(message = "El detalle es obligatorio")
     @Size(max = 40, message = "El detalle no puede exceder los 40 caracteres")
     private String detalle;
+
+    /**
+     * Opcional para Supervisor/Propietario: si es true, consolida el movimiento en Libro Mayor inmediatamente.
+     */
+    private Boolean consolidarDirecto;
 }
