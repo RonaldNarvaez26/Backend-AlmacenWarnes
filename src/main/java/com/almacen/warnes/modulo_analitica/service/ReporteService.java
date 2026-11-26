@@ -150,6 +150,60 @@ public class ReporteService {
         return opt;
     }
 
+    /**
+     * Genera un corte financiero consolidado por período (Diario, Semanal, Mensual, etc.)
+     */
+    @Transactional
+    public ReporteDetalleDTO generarReportePeriodo(GenerarReportePeriodoDTO dto, Usuario usuarioAutenticado) {
+        if (usuarioAutenticado == null) {
+            throw new SecurityException("Debe iniciar sesión para generar un reporte.");
+        }
+
+        if (dto.getFechaInicio() == null || dto.getFechaFin() == null) {
+            throw new IllegalArgumentException("Debe especificar fecha de inicio y fecha de fin.");
+        }
+
+        if (dto.getFechaInicio().isAfter(dto.getFechaFin())) {
+            throw new IllegalArgumentException("La fecha de inicio no puede ser posterior a la fecha de fin.");
+        }
+
+        Integer sucursalEfectiva = dto.getSucursalId();
+        if (usuarioAutenticado.getRolId() == 3) {
+            // Propietario: puede elegir cualquier sucursal, o usar la de sesión si no se especifica
+            if (sucursalEfectiva == null || sucursalEfectiva <= 0) {
+                sucursalEfectiva = usuarioAutenticado.getSucursalId();
+            }
+        } else {
+            // Supervisor o Cajero: restringido estrictamente a su sucursal asignada
+            sucursalEfectiva = usuarioAutenticado.getSucursalId();
+        }
+
+        if (sucursalEfectiva == null || sucursalEfectiva <= 0) {
+            throw new IllegalArgumentException("Debe especificar una sucursal válida para generar el reporte.");
+        }
+
+        String periodo = dto.getPeriodo();
+        if (periodo == null || periodo.isBlank()) {
+            periodo = "Personalizado";
+        }
+
+        log.info("Generando reporte de período: sucursal={}, periodo={}, rango=[{} - {}], usuarioId={}",
+                sucursalEfectiva, periodo, dto.getFechaInicio(), dto.getFechaFin(), usuarioAutenticado.getUsuarioId());
+
+        Integer nuevoReporteId = reporteRepository.generarReportePeriodo(
+                sucursalEfectiva,
+                periodo.trim(),
+                dto.getFechaInicio(),
+                dto.getFechaFin(),
+                usuarioAutenticado.getUsuarioId()
+        );
+
+        log.info("Reporte de período generado con éxito -> Reporte ID: {}", nuevoReporteId);
+
+        return reporteRepository.obtenerDetalleReporte(nuevoReporteId)
+                .orElseThrow(() -> new IllegalStateException("Error al recuperar el reporte recién generado (ID: " + nuevoReporteId + ")"));
+    }
+
     private String toJson(Object obj) {
         try {
             return objectMapper.writeValueAsString(obj);

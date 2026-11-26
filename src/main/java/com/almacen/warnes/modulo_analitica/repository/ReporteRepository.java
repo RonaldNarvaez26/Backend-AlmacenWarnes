@@ -98,6 +98,31 @@ public class ReporteRepository {
     }
 
     /**
+     * Genera un reporte financiero consolidado por período mediante sp_reportes_generar_periodo.
+     */
+    public Integer generarReportePeriodo(
+            Integer sucursalId,
+            String periodo,
+            java.time.LocalDateTime fechaInicio,
+            java.time.LocalDateTime fechaFin,
+            Integer usuarioId
+    ) {
+        return jdbcTemplate.execute((Connection conn) -> {
+            try (CallableStatement cs = conn.prepareCall("CALL sp_reportes_generar_periodo(?, ?, ?, ?, ?, ?)")) {
+                cs.setInt(1, sucursalId);
+                cs.setString(2, periodo != null ? periodo : "Personalizado");
+                cs.setTimestamp(3, java.sql.Timestamp.valueOf(fechaInicio));
+                cs.setTimestamp(4, java.sql.Timestamp.valueOf(fechaFin));
+                cs.setInt(5, usuarioId);
+                cs.registerOutParameter(6, Types.INTEGER);
+
+                cs.execute();
+                return cs.getInt(6);
+            }
+        });
+    }
+
+    /**
      * Lista reportes con filtros para el Libro Mayor mediante fn_reportes_listar.
      */
     public List<ReporteListadoDTO> listarReportes(

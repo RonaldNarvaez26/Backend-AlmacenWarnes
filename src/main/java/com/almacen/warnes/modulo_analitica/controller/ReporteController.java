@@ -1,5 +1,6 @@
 package com.almacen.warnes.modulo_analitica.controller;
 
+import com.almacen.warnes.modulo_analitica.dto.GenerarReportePeriodoDTO;
 import com.almacen.warnes.modulo_analitica.dto.ReporteDetalleDTO;
 import com.almacen.warnes.modulo_analitica.dto.ReporteListadoDTO;
 import com.almacen.warnes.modulo_analitica.service.ReporteService;
@@ -8,6 +9,7 @@ import com.almacen.warnes.modulo_seguridad.util.SecurityContextHelper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -74,5 +76,37 @@ public class ReporteController {
         }
 
         return ResponseEntity.ok(detalleOpt.get());
+    }
+
+    @Operation(summary = "Generar un reporte financiero consolidado por período", description = "Ejecuta sp_reportes_generar_periodo para consolidar ventas y movimientos en un rango de fechas.")
+    @PostMapping("/generar-corte")
+    public ResponseEntity<?> generarReportePeriodo(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @Valid @RequestBody GenerarReportePeriodoDTO dto
+    ) {
+        Optional<Usuario> uOpt = securityContextHelper.obtenerUsuarioSesion(null, authHeader);
+        if (uOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Sesión no válida o expirada"));
+        }
+
+        try {
+            ReporteDetalleDTO reporte = reporteService.generarReportePeriodo(dto, uOpt.get());
+            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                    "mensaje", "Reporte de período generado con éxito",
+                    "reporteId", reporte.getReporteId(),
+                    "reporte", reporte
+            ));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("Error al generar reporte de período: {}", e.getMessage(), e);
+            String msg = e.getMessage() != null && e.getMessage().contains("ERROR:")
+                    ? e.getMessage().substring(e.getMessage().indexOf("ERROR:") + 6).split("\n")[0].trim()
+                    : "Error al generar el reporte de período";
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", msg));
+        }
     }
 }
